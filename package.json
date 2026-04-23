@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "GitHub Action for generating AI Bills of Materials (AIBOMs) with AIBoMGen-cli",
+  "description": "GitHub Action for generating AI Bills of Materials (AIBOMs) with aibomgen-cli",
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
@@ -20,7 +20,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/idlab-discover/AIBoMGen-cli-action.git"
+    "url": "git+https://github.com/idlab-discover/aibomgen-cli-action.git"
   },
   "keywords": [
     "actions",
@@ -33,9 +33,9 @@
   "author": "IDLab Discover",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/idlab-discover/AIBoMGen-cli-action/issues"
+    "url": "https://github.com/idlab-discover/aibomgen-cli-action/issues"
   },
-  "homepage": "https://github.com/idlab-discover/AIBoMGen-cli-action#readme",
+  "homepage": "https://github.com/idlab-discover/aibomgen-cli-action#readme",
   "dependencies": {
     "@actions/artifact": "^6.1.0",
     "@actions/core": "^3.0.0",

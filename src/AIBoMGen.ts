@@ -1,13 +1,13 @@
 /**
  * Used for filesystem directory input to the `scan` command.
- * AIBoMGen-cli scans the directory for Hugging Face model imports in source files.
+ * aibomgen-cli scans the directory for Hugging Face model imports in source files.
  */
 export interface AIBoMGenDirectoryInput {
   path: string;
 }
 
 /**
- * Options for the AIBoMGen-cli `scan` subcommand.
+ * Options for the aibomgen-cli `scan` subcommand.
  *
  * The scan command scans a directory for AI-related imports (e.g. Hugging Face
  * model IDs referenced in Python files) and generates an AIBOM for each
@@ -67,6 +67,6 @@ export interface AIBoMGenOptions {
    */
   logLevel: "quiet" | "standard" | "debug";
 
-  /** Path to an AIBoMGen-cli config file (--config persistent flag). */
+  /** Path to an aibomgen-cli config file (--config persistent flag). */
   configFile: string;
 }

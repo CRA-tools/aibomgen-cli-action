@@ -48,15 +48,15 @@ function getReleaseAssetName(version: string): string {
 }
 
 /**
- * Downloads the AIBoMGen-cli release binary for the current platform from
- * the GitHub Releases page of idlab-discover/AIBoMGen-cli.
+ * Downloads the aibomgen-cli release binary for the current platform from
+ * the GitHub Releases page of idlab-discover/aibomgen-cli.
  */
 export async function downloadAIBoMGen(): Promise<string> {
   const version = AIBOMGEN_VERSION;
   const assetName = getReleaseAssetName(version);
-  const url = `https://github.com/idlab-discover/AIBoMGen-cli/releases/download/${version}/${assetName}`;
+  const url = `https://github.com/idlab-discover/aibomgen-cli/releases/download/${version}/${assetName}`;
 
-  core.info(`Downloading AIBoMGen-cli from ${url}`);
+  core.info(`Downloading aibomgen-cli from ${url}`);
 
   const downloadPath = await cache.downloadTool(url);
 
@@ -71,7 +71,7 @@ export async function downloadAIBoMGen(): Promise<string> {
 }
 
 /**
- * Resolves (and caches) the path to the AIBoMGen-cli binary.
+ * Resolves (and caches) the path to the aibomgen-cli binary.
  *
  * Precedence:
  *   1. Build from a GitHub archive URL passed as aibomgen-version
@@ -85,7 +85,7 @@ export async function getAIBoMGenCommand(): Promise<string> {
   // Allow passing a GitHub archive URL to build from source via go build
   const sourceBuilt = await downloadAIBoMGenFromZip(version);
   if (sourceBuilt) {
-    core.info(`Using source-built AIBoMGen-cli: '${sourceBuilt}'`);
+    core.info(`Using source-built aibomgen-cli: '${sourceBuilt}'`);
     return sourceBuilt;
   }
 
@@ -95,7 +95,7 @@ export async function getAIBoMGenCommand(): Promise<string> {
     binaryPath = await cache.cacheFile(binaryPath, name, name, version);
   }
 
-  core.debug(`AIBoMGen-cli cached at: ${binaryPath}/${name}`);
+  core.debug(`aibomgen-cli cached at: ${binaryPath}/${name}`);
   core.addPath(binaryPath);
   return `${binaryPath}/${name}`;
 }
@@ -134,7 +134,7 @@ export function getArtifactName(): string {
 }
 
 /**
- * Runs the AIBoMGen-cli `scan` subcommand.
+ * Runs the aibomgen-cli `scan` subcommand.
  *
  * The scan command discovers Hugging Face model imports in source files inside
  * the given directory, fetches model metadata from the HF Hub, and writes one
@@ -203,7 +203,7 @@ async function executeAIBoMGenScan(opts: AIBoMGenOptions): Promise<string[]> {
   const args = [...rootArgs, ...scanArgs];
   core.info(`[command]${cmd} ${args.join(" ")}`);
 
-  const exitCode = await core.group("Executing AIBoMGen-cli scan...", async () =>
+  const exitCode = await core.group("Executing aibomgen-cli scan...", async () =>
     execute(cmd, args, {
       listeners: {
         stdout(buffer) {
@@ -220,7 +220,7 @@ async function executeAIBoMGenScan(opts: AIBoMGenOptions): Promise<string[]> {
   );
 
   if (exitCode > 0) {
-    throw new Error("AIBoMGen-cli scan failed");
+    throw new Error("aibomgen-cli scan failed");
   }
 
   // Glob the output directory for all AIBOM files written by the CLI.
@@ -328,11 +328,11 @@ export async function attachReleaseAssets(): Promise<void> {
 }
 
 /**
- * Main action entry point: runs AIBoMGen-cli scan and uploads the output file
+ * Main action entry point: runs aibomgen-cli scan and uploads the output file
  * as a workflow artifact.
  */
 export async function runAIBoMGenAction(): Promise<void> {
-  core.info(dashWrap("Running AIBoMGen-cli Action"));
+  core.info(dashWrap("Running aibomgen-cli Action"));
   debugLog("GitHub context:", github.context);
 
   const start = Date.now();

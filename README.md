@@ -1,11 +1,11 @@
-# AIBoMGen-cli Action
+# aibomgen-cli Action
 
-A GitHub Action that generates an **AI Bill of Materials (AIBOM)** for Hugging Face models referenced in your repository, using [AIBoMGen-cli](https://github.com/idlab-discover/AIBoMGen-cli).
+A GitHub Action that generates an **AI Bill of Materials (AIBOM)** for Hugging Face models referenced in your repository, using [aibomgen-cli](https://github.com/idlab-discover/aibomgen-cli).
 
 ## Usage
 
 ```yaml
-- uses: idlab-discover/AIBoMGen-cli-action@main
+- uses: idlab-discover/aibomgen-cli-action@main
   with:
     # Directory to scan for Hugging Face model references.
     # Default: "."
@@ -40,7 +40,7 @@ A GitHub Action that generates an **AI Bill of Materials (AIBOM)** for Hugging F
     # Default: "standard"
     log-level: standard
 
-    # Path to an AIBoMGen-cli config file (passed as --config before the subcommand).
+    # Path to an aibomgen-cli config file (passed as --config before the subcommand).
     config: ""
 
     # Version tag to download from GitHub Releases, or a GitHub archive URL to

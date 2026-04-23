@@ -7,16 +7,16 @@ import { execute } from "./Executor";
 
 /**
  * Pattern to detect a GitHub archive URL so we can build from source.
- * e.g. https://github.com/idlab-discover/AIBoMGen-cli/archive/refs/heads/main.zip
+ * e.g. https://github.com/idlab-discover/aibomgen-cli/archive/refs/heads/main.zip
  */
 const archivePattern = /https:..github.com.([-\w]+).([-\w]+).archive.refs.heads.([-\w]+).zip/;
 
 /**
- * Downloads and builds AIBoMGen-cli from a GitHub archive URL using `go build`.
+ * Downloads and builds aibomgen-cli from a GitHub archive URL using `go build`.
  * Returns the path to the built binary, or an empty string if the URL is not
  * an archive URL.
  *
- * AIBoMGen-cli is a Go CLI tool; building from source requires Go to be
+ * aibomgen-cli is a Go CLI tool; building from source requires Go to be
  * available on the runner.
  */
 export async function downloadAIBoMGenFromZip(url: string): Promise<string> {

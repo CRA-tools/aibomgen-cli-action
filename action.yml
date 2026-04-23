@@ -1,6 +1,6 @@
 ---
-name: "AIBoMGen-cli Action"
-description: "Generates an AI Bill of Materials (AIBOM) for ML model files using AIBoMGen-cli"
+name: "aibomgen-cli Action"
+description: "Generates an AI Bill of Materials (AIBOM) for ML model files using aibomgen-cli"
 author: "IDLab Discover"
 branding:
   color: blue
@@ -32,7 +32,7 @@ inputs:
 
   aibomgen-version:
     required: false
-    description: "The version of AIBoMGen-cli to use (e.g. v0.1.0)"
+    description: "The version of aibomgen-cli to use (e.g. v0.1.0)"
 
   upload-artifact:
     required: false
@@ -84,7 +84,7 @@ inputs:
 
   config:
     required: false
-    description: "Path to an AIBoMGen-cli configuration file (--config persistent flag)"
+    description: "Path to an aibomgen-cli configuration file (--config persistent flag)"
 
   run:
     required: true
@@ -93,7 +93,7 @@ inputs:
 
 outputs:
   cmd:
-    description: "A reference to the AIBoMGen-cli command (set when run=download-aibomgen)"
+    description: "A reference to the aibomgen-cli command (set when run=download-aibomgen)"
 
 runs:
   using: "node20"
