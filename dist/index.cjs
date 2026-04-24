@@ -94935,8 +94935,8 @@ function getReleaseAssetName(version3) {
 async function downloadAIBoMGen() {
   const version3 = AIBOMGEN_VERSION;
   const assetName = getReleaseAssetName(version3);
-  const url2 = `https://github.com/idlab-discover/AIBoMGen-cli/releases/download/${version3}/${assetName}`;
-  info(`Downloading AIBoMGen-cli from ${url2}`);
+  const url2 = `https://github.com/idlab-discover/aibomgen-cli/releases/download/${version3}/${assetName}`;
+  info(`Downloading aibomgen-cli from ${url2}`);
   const downloadPath = await downloadTool(url2);
   let extractedDir;
   if (process.platform === "win32") {
@@ -94951,7 +94951,7 @@ async function getAIBoMGenCommand() {
   const version3 = AIBOMGEN_VERSION;
   const sourceBuilt = await downloadAIBoMGenFromZip(version3);
   if (sourceBuilt) {
-    info(`Using source-built AIBoMGen-cli: '${sourceBuilt}'`);
+    info(`Using source-built aibomgen-cli: '${sourceBuilt}'`);
     return sourceBuilt;
   }
   let binaryPath = find(name, version3);
@@ -94959,7 +94959,7 @@ async function getAIBoMGenCommand() {
     binaryPath = await downloadAIBoMGen();
     binaryPath = await cacheFile(binaryPath, name, name, version3);
   }
-  debug(`AIBoMGen-cli cached at: ${binaryPath}/${name}`);
+  debug(`aibomgen-cli cached at: ${binaryPath}/${name}`);
   addPath(binaryPath);
   return `${binaryPath}/${name}`;
 }
@@ -95018,7 +95018,7 @@ async function executeAIBoMGenScan(opts) {
   const args = [...rootArgs, ...scanArgs];
   info(`[command]${cmd} ${args.join(" ")}`);
   const exitCode = await group(
-    "Executing AIBoMGen-cli scan...",
+    "Executing aibomgen-cli scan...",
     async () => execute(cmd, args, {
       listeners: {
         stdout(buffer2) {
@@ -95034,7 +95034,7 @@ async function executeAIBoMGenScan(opts) {
     })
   );
   if (exitCode > 0) {
-    throw new Error("AIBoMGen-cli scan failed");
+    throw new Error("aibomgen-cli scan failed");
   }
   const aibomSuffix = opts.format === "xml" ? "aibom.xml" : "aibom.json";
   if (!fs11.existsSync(outputDir)) {
@@ -95110,7 +95110,7 @@ async function attachReleaseAssets() {
   }
 }
 async function runAIBoMGenAction() {
-  info(dashWrap("Running AIBoMGen-cli Action"));
+  info(dashWrap("Running aibomgen-cli Action"));
   debugLog("GitHub context:", context2);
   const start = Date.now();
   const doUpload = (getInput("upload-artifact") || "true").toLowerCase() === "true";
