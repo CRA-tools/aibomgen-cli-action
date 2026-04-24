@@ -1,4 +1,4 @@
-# aibomgen-cli Action
+# AIBoMGen CLI: Generate AIBOM Action
 
 A GitHub Action that generates an **AI Bill of Materials (AIBOM)** for Hugging Face models referenced in your repository, using [aibomgen-cli](https://github.com/idlab-discover/aibomgen-cli).
 
