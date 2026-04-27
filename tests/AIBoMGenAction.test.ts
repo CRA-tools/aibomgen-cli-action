@@ -160,7 +160,10 @@ describe("AIBoMGen Action command argument builder", () => {
 
 describe("AIBoMGen Action safety helpers", () => {
   it("supports exact and glob artifact matching", () => {
-    assert.equal(__test.artifactMatches("repo-job-scan-aibom", "repo-job-scan-aibom", "exact"), true);
+    assert.equal(
+      __test.artifactMatches("repo-job-scan-aibom", "repo-job-scan-aibom", "exact"),
+      true,
+    );
     assert.equal(__test.artifactMatches("repo-job-scan-aibom", "repo-*-scan-*", "glob"), true);
     assert.equal(__test.artifactMatches("repo-job-scan-aibom", "other-*", "glob"), false);
   });
