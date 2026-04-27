@@ -13,14 +13,3 @@ export async function execute(
 ): Promise<number> {
   return exec.exec(cmd, args, options);
 }
-
-/**
- * Maps a Windows-style absolute path to the equivalent WSL path.
- * e.g. "C:\foo\bar" → "/mnt/c/foo/bar"
- */
-export function mapToWSLPath(arg: string): string {
-  return arg.replace(
-    /^([A-Z]):(.*)$/,
-    (_v, drive: string, rest: string) => `/mnt/${drive.toLowerCase()}${rest.replace(/\\/g, "/")}`,
-  );
-}

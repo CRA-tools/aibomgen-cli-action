@@ -28516,8 +28516,8 @@ var require_async = __commonJS({
             return callback(null, results);
           }
           while (readyTasks.length && runningTasks < concurrency) {
-            var run2 = readyTasks.shift();
-            run2();
+            var run = readyTasks.shift();
+            run();
           }
         }
         function addListener(taskName, fn) {
@@ -54825,7 +54825,7 @@ var require_light = __commonJS({
           }
           return this.Events.trigger("scheduled", { args: this.args, options: this.options });
         }
-        async doExecute(chained, clearGlobalState, run2, free) {
+        async doExecute(chained, clearGlobalState, run, free) {
           var error2, eventInfo, passed;
           if (this.retryCount === 0) {
             this._assertStatus("RUNNING");
@@ -54845,10 +54845,10 @@ var require_light = __commonJS({
             }
           } catch (error1) {
             error2 = error1;
-            return this._onFailure(error2, eventInfo, clearGlobalState, run2, free);
+            return this._onFailure(error2, eventInfo, clearGlobalState, run, free);
           }
         }
-        doExpire(clearGlobalState, run2, free) {
+        doExpire(clearGlobalState, run, free) {
           var error2, eventInfo;
           if (this._states.jobStatus(this.options.id === "RUNNING")) {
             this._states.next(this.options.id);
@@ -54856,9 +54856,9 @@ var require_light = __commonJS({
           this._assertStatus("EXECUTING");
           eventInfo = { args: this.args, options: this.options, retryCount: this.retryCount };
           error2 = new BottleneckError$1(`This job timed out after ${this.options.expiration} ms.`);
-          return this._onFailure(error2, eventInfo, clearGlobalState, run2, free);
+          return this._onFailure(error2, eventInfo, clearGlobalState, run, free);
         }
-        async _onFailure(error2, eventInfo, clearGlobalState, run2, free) {
+        async _onFailure(error2, eventInfo, clearGlobalState, run, free) {
           var retry2, retryAfter;
           if (clearGlobalState()) {
             retry2 = await this.Events.trigger("failed", error2, eventInfo);
@@ -54866,7 +54866,7 @@ var require_light = __commonJS({
               retryAfter = ~~retry2;
               this.Events.trigger("retry", `Retrying ${this.options.id} after ${retryAfter} ms`, eventInfo);
               this.retryCount++;
-              return run2(retryAfter);
+              return run(retryAfter);
             } else {
               this.doDone(eventInfo);
               await free(this.options, eventInfo);
@@ -55504,17 +55504,17 @@ var require_light = __commonJS({
             }
           }
           _run(index, job, wait) {
-            var clearGlobalState, free, run2;
+            var clearGlobalState, free, run;
             job.doRun();
             clearGlobalState = this._clearGlobalState.bind(this, index);
-            run2 = this._run.bind(this, index, job);
+            run = this._run.bind(this, index, job);
             free = this._free.bind(this, index, job);
             return this._scheduled[index] = {
               timeout: setTimeout(() => {
-                return job.doExecute(this._limiter, clearGlobalState, run2, free);
+                return job.doExecute(this._limiter, clearGlobalState, run, free);
               }, wait),
               expiration: job.options.expiration != null ? setTimeout(function() {
-                return job.doExpire(clearGlobalState, run2, free);
+                return job.doExpire(clearGlobalState, run, free);
               }, wait + job.options.expiration) : void 0,
               job
             };
@@ -56025,8 +56025,8 @@ function toCommandProperties(annotationProperties) {
 }
 
 // node_modules/@actions/core/lib/command.js
-function issueCommand(command, properties, message) {
-  const cmd = new Command(command, properties, message);
+function issueCommand(command2, properties, message) {
+  const cmd = new Command(command2, properties, message);
   process.stdout.write(cmd.toString() + os.EOL);
 }
 function issue(name, message = "") {
@@ -56034,11 +56034,11 @@ function issue(name, message = "") {
 }
 var CMD_STRING = "::";
 var Command = class {
-  constructor(command, properties, message) {
-    if (!command) {
-      command = "missing.command";
+  constructor(command2, properties, message) {
+    if (!command2) {
+      command2 = "missing.command";
     }
-    this.command = command;
+    this.command = command2;
     this.properties = properties;
     this.message = message;
   }
@@ -56076,10 +56076,10 @@ function escapeProperty(s2) {
 var crypto2 = __toESM(require("crypto"), 1);
 var fs = __toESM(require("fs"), 1);
 var os2 = __toESM(require("os"), 1);
-function issueFileCommand(command, message) {
-  const filePath = process.env[`GITHUB_${command}`];
+function issueFileCommand(command2, message) {
+  const filePath = process.env[`GITHUB_${command2}`];
   if (!filePath) {
-    throw new Error(`Unable to find environment variable for file command ${command}`);
+    throw new Error(`Unable to find environment variable for file command ${command2}`);
   }
   if (!fs.existsSync(filePath)) {
     throw new Error(`Missing file at path: ${filePath}`);
@@ -62222,12 +62222,13 @@ function _getGlobal(key, defaultValue) {
 }
 
 // src/github/AIBoMGenGithubAction.ts
+var import_crypto = require("crypto");
 var fs11 = __toESM(require("fs"), 1);
 var import_os7 = __toESM(require("os"), 1);
 var import_path4 = __toESM(require("path"), 1);
 
 // src/AIBoMGenVersion.ts
-var VERSION7 = "v0.1.0";
+var VERSION7 = "v0.2.1";
 
 // src/github/AIBoMGenDownloader.ts
 var import_fs3 = __toESM(require("fs"), 1);
@@ -94916,6 +94917,109 @@ var GithubClient = class {
 var AIBOMGEN_BINARY_NAME = "aibomgen-cli";
 var AIBOMGEN_VERSION = getInput("aibomgen-version") || VERSION7;
 var exeSuffix = process.platform === "win32" ? ".exe" : "";
+var DEFAULT_OUTPUT_DIR = "dist";
+var COMMANDS = [
+  "download",
+  "scan",
+  "generate",
+  "validate",
+  "completeness",
+  "vuln-scan",
+  "merge"
+];
+var FORMATS = ["json", "xml", "auto"];
+var HF_MODES = ["online", "dummy"];
+var LOG_LEVELS = ["quiet", "standard", "debug"];
+function parseBooleanInput(name, defaultValue, getInput2) {
+  const raw = getInput2(name);
+  if (!raw) {
+    return defaultValue;
+  }
+  const value = raw.trim().toLowerCase();
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw new Error(`Input '${name}' must be 'true' or 'false', got '${raw}'.`);
+}
+function parseIntegerInput(name, defaultValue, options, getInput2) {
+  const safeGetInput = getInput2 ?? ((inputName) => getInput(inputName));
+  const raw = safeGetInput(name);
+  if (!raw) {
+    return defaultValue;
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value)) {
+    throw new Error(`Input '${name}' must be an integer, got '${raw}'.`);
+  }
+  if (options?.min !== void 0 && value < options.min) {
+    throw new Error(`Input '${name}' must be >= ${options.min}, got '${value}'.`);
+  }
+  if (options?.max !== void 0 && value > options.max) {
+    throw new Error(`Input '${name}' must be <= ${options.max}, got '${value}'.`);
+  }
+  return value;
+}
+function parseNumberInput(name, getInput2) {
+  const raw = getInput2(name);
+  if (!raw) {
+    return void 0;
+  }
+  const value = Number(raw);
+  if (Number.isNaN(value)) {
+    throw new Error(`Input '${name}' must be a number, got '${raw}'.`);
+  }
+  return value;
+}
+function parseListInput(name, getInput2) {
+  const raw = getInput2(name);
+  if (!raw) {
+    return [];
+  }
+  const out = raw.split(/[\n,]/).map((v) => v.trim()).filter((v) => v.length > 0);
+  return [...new Set(out)];
+}
+function parseEnumInput(name, values, defaultValue, getInput2) {
+  const raw = getInput2(name);
+  if (!raw) {
+    return defaultValue;
+  }
+  const value = raw.trim();
+  if (!values.includes(value)) {
+    throw new Error(`Input '${name}' must be one of: ${values.join(", ")}. Got '${raw}'.`);
+  }
+  return value;
+}
+function getActionCommand(getInput2 = (name) => getInput(name), setSecret2 = (value) => setSecret(value)) {
+  const githubToken = getInput2("github-token");
+  if (githubToken) {
+    setSecret2(githubToken);
+  }
+  return parseEnumInput("command", COMMANDS, "scan", getInput2);
+}
+function getArtifactOptions(getInput2 = (name) => getInput(name)) {
+  return {
+    artifactMatch: getInput2("aibom-artifact-match"),
+    artifactMatchMode: parseEnumInput(
+      "aibom-artifact-match-mode",
+      ["exact", "glob"],
+      "exact",
+      getInput2
+    ),
+    artifactName: getInput2("artifact-name"),
+    releaseRefPrefix: getInput2("release-ref-prefix") || "refs/tags/",
+    uploadArtifact: parseBooleanInput("upload-artifact", true, getInput2),
+    uploadArtifactRetention: parseIntegerInput(
+      "upload-artifact-retention",
+      0,
+      { min: 0, max: 90 },
+      getInput2
+    ),
+    uploadReleaseAssets: parseBooleanInput("upload-release-assets", true, getInput2)
+  };
+}
 function getReleaseAssetName(version3) {
   const versionNoV = version3.replace(/^v/, "");
   const platformMap = {
@@ -94932,12 +95036,46 @@ function getReleaseAssetName(version3) {
   const ext = process.platform === "win32" ? "zip" : "tar.gz";
   return `${AIBOMGEN_BINARY_NAME}_${versionNoV}_${platform2}_${arch3}.${ext}`;
 }
+function verifySha256(filePath, expectedSha256) {
+  const hash = (0, import_crypto.createHash)("sha256").update(fs11.readFileSync(filePath)).digest("hex");
+  if (hash.toLowerCase() !== expectedSha256.toLowerCase()) {
+    throw new Error(`SHA256 mismatch for downloaded aibomgen-cli archive. Expected ${expectedSha256}, got ${hash}.`);
+  }
+}
+function globToRegExp(pattern) {
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  const regex = `^${escaped.replace(/\*/g, ".*").replace(/\?/g, ".")}$`;
+  return new RegExp(regex);
+}
+function artifactMatches(name, pattern, mode) {
+  if (!pattern) {
+    return true;
+  }
+  if (mode === "exact") {
+    return name === pattern;
+  }
+  return globToRegExp(pattern).test(name);
+}
+function redactText(text, secrets) {
+  let out = text;
+  for (const secret of secrets) {
+    if (!secret) {
+      continue;
+    }
+    out = out.split(secret).join("***");
+  }
+  return out;
+}
 async function downloadAIBoMGen() {
   const version3 = AIBOMGEN_VERSION;
   const assetName = getReleaseAssetName(version3);
   const url2 = `https://github.com/idlab-discover/aibomgen-cli/releases/download/${version3}/${assetName}`;
   info(`Downloading aibomgen-cli from ${url2}`);
   const downloadPath = await downloadTool(url2);
+  const expectedSha256 = getInput("aibomgen-sha256").trim().toLowerCase();
+  if (expectedSha256) {
+    verifySha256(downloadPath, expectedSha256);
+  }
   let extractedDir;
   if (process.platform === "win32") {
     extractedDir = await extractZip(downloadPath);
@@ -94963,179 +95101,381 @@ async function getAIBoMGenCommand() {
   addPath(binaryPath);
   return `${binaryPath}/${name}`;
 }
-function getAIBomFormat() {
-  return getInput("format") || "json";
-}
-function getArtifactName() {
+function getArtifactName(command2) {
   const fileName = getInput("artifact-name");
   if (fileName) {
     return fileName;
   }
-  const format = getAIBomFormat();
-  const extension = format === "xml" ? "cyclonedx.xml" : "cyclonedx.json";
   const {
     repo: { repo },
-    job,
-    action: action5
+    job
   } = context2;
-  let stepName = action5.replace(/__[-_a-z]+/, "");
-  if (stepName) {
-    stepName = `-${stepName}`;
-  }
-  return `${repo}-${job}${stepName}.${extension}`;
+  return `${repo}-${job}-${command2}-aibom`;
 }
-async function executeAIBoMGenScan(opts) {
-  const cmd = await getAIBoMGenCommand();
-  const rootArgs = [];
-  if (opts.configFile) {
-    rootArgs.push("--config", opts.configFile);
+function buildCommonCommandArgs(getInput2, setSecret2) {
+  const format = parseEnumInput("format", FORMATS, "auto", getInput2);
+  const hfMode = parseEnumInput("hf-mode", HF_MODES, "online", getInput2);
+  const logLevel = parseEnumInput("log-level", LOG_LEVELS, "standard", getInput2);
+  const hfTimeout = parseIntegerInput("hf-timeout", 0, { min: 0 }, getInput2);
+  const specVersion = getInput2("spec-version").trim();
+  const outputFile = getInput2("output-file").trim();
+  const hfToken = getInput2("hf-token").trim();
+  const configFile = getInput2("config").trim();
+  const noSecurityScan = parseBooleanInput("no-security-scan", false, getInput2);
+  if (hfToken) {
+    setSecret2(hfToken);
   }
-  const scanArgs = ["scan"];
-  scanArgs.push("--input", opts.input.path);
-  let outputDir;
-  if (opts.outputFile) {
-    scanArgs.push("--output", opts.outputFile);
-    outputDir = import_path4.default.dirname(opts.outputFile);
+  const args = [];
+  if (configFile) {
+    args.push("--config", configFile);
+  }
+  return {
+    args,
+    configFile,
+    format,
+    hfMode,
+    hfTimeout,
+    hfToken,
+    logLevel,
+    noSecurityScan,
+    outputFile,
+    specVersion
+  };
+}
+function applyScanLikeFlags(args, common, getInput2, options) {
+  const formatInputName = options?.outputFormatInputName;
+  if (common.outputFile) {
+    args.push("--output", common.outputFile);
+  }
+  if (formatInputName) {
+    const outputFormat = parseEnumInput(formatInputName, FORMATS, "auto", getInput2);
+    args.push("--output-format", outputFormat);
   } else {
-    outputDir = "dist";
+    args.push("--format", common.format);
   }
-  if (opts.format && opts.format !== "auto") {
-    scanArgs.push("--format", opts.format);
+  if (common.specVersion) {
+    args.push("--spec", common.specVersion);
   }
-  if (opts.specVersion) {
-    scanArgs.push("--spec", opts.specVersion);
+  if (common.hfToken) {
+    args.push("--hf-token", common.hfToken);
   }
-  if (opts.hfToken) {
-    scanArgs.push("--hf-token", opts.hfToken);
+  if (common.hfMode) {
+    args.push("--hf-mode", common.hfMode);
   }
-  if (opts.hfMode) {
-    scanArgs.push("--hf-mode", opts.hfMode);
+  if (common.hfTimeout > 0) {
+    args.push("--hf-timeout", String(common.hfTimeout));
   }
-  if (opts.hfTimeout > 0) {
-    scanArgs.push("--hf-timeout", String(opts.hfTimeout));
+  if (common.noSecurityScan) {
+    args.push("--no-security-scan");
   }
-  scanArgs.push("--log-level", opts.logLevel || "standard");
-  const args = [...rootArgs, ...scanArgs];
-  info(`[command]${cmd} ${args.join(" ")}`);
+  args.push("--log-level", common.logLevel);
+  return args;
+}
+function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSecret2 = (value) => setSecret(value)) {
+  const common = buildCommonCommandArgs(getInput2, setSecret2);
+  const args = [...common.args];
+  const sensitiveValues = [common.hfToken, common.configFile].filter((v) => Boolean(v));
+  switch (command2) {
+    case "scan": {
+      const inputPath = getInput2("scan-input") || ".";
+      const scanArgs = ["scan", "--input", inputPath.trim()];
+      applyScanLikeFlags(scanArgs, common, getInput2);
+      args.push(...scanArgs);
+      return {
+        args,
+        sensitiveValues,
+        expectedOutputFiles: common.outputFile ? [common.outputFile] : [],
+        outputDirectory: common.outputFile ? import_path4.default.dirname(common.outputFile) : DEFAULT_OUTPUT_DIR,
+        outputSuffix: common.format === "xml" ? "aibom.xml" : "aibom.json"
+      };
+    }
+    case "generate": {
+      const modelIds = parseListInput("generate-model-ids", getInput2);
+      if (modelIds.length === 0) {
+        throw new Error("Input 'generate-model-ids' is required when command=generate.");
+      }
+      const generateArgs = ["generate"];
+      for (const modelId of modelIds) {
+        generateArgs.push("--model-id", modelId);
+      }
+      applyScanLikeFlags(generateArgs, common, getInput2);
+      args.push(...generateArgs);
+      return {
+        args,
+        sensitiveValues,
+        expectedOutputFiles: common.outputFile ? [common.outputFile] : [],
+        outputDirectory: common.outputFile ? import_path4.default.dirname(common.outputFile) : DEFAULT_OUTPUT_DIR,
+        outputSuffix: common.format === "xml" ? "aibom.xml" : "aibom.json"
+      };
+    }
+    case "validate": {
+      const inputFile = getInput2("validate-input").trim();
+      if (!inputFile) {
+        throw new Error("Input 'validate-input' is required when command=validate.");
+      }
+      const strict = parseBooleanInput("validate-strict", false, getInput2);
+      const checkModelCard = parseBooleanInput("validate-check-model-card", false, getInput2);
+      const minScore = parseNumberInput("validate-min-score", getInput2);
+      if (minScore !== void 0 && (minScore < 0 || minScore > 1)) {
+        throw new Error("Input 'validate-min-score' must be between 0 and 1.");
+      }
+      const validateArgs = ["validate", "--input", inputFile, "--format", common.format];
+      if (strict) {
+        validateArgs.push("--strict");
+      }
+      if (checkModelCard) {
+        validateArgs.push("--check-model-card");
+      }
+      if (minScore !== void 0) {
+        validateArgs.push("--min-score", String(minScore));
+      }
+      validateArgs.push("--log-level", common.logLevel);
+      args.push(...validateArgs);
+      return {
+        args,
+        sensitiveValues,
+        expectedOutputFiles: [],
+        outputDirectory: DEFAULT_OUTPUT_DIR,
+        outputSuffix: ""
+      };
+    }
+    case "completeness": {
+      const inputFile = getInput2("completeness-input").trim();
+      if (!inputFile) {
+        throw new Error("Input 'completeness-input' is required when command=completeness.");
+      }
+      const plainSummary = parseBooleanInput("completeness-plain-summary", false, getInput2);
+      const completenessArgs = ["completeness", "--input", inputFile, "--format", common.format];
+      if (plainSummary) {
+        completenessArgs.push("--plain-summary");
+      }
+      completenessArgs.push("--log-level", common.logLevel);
+      args.push(...completenessArgs);
+      return {
+        args,
+        sensitiveValues,
+        expectedOutputFiles: [],
+        outputDirectory: DEFAULT_OUTPUT_DIR,
+        outputSuffix: ""
+      };
+    }
+    case "vuln-scan": {
+      const inputFile = getInput2("vuln-scan-input").trim();
+      if (!inputFile) {
+        throw new Error("Input 'vuln-scan-input' is required when command=vuln-scan.");
+      }
+      const enrich = parseBooleanInput("vuln-scan-enrich", false, getInput2);
+      const noPreview = parseBooleanInput("vuln-scan-no-preview", false, getInput2);
+      const outputFormat = parseEnumInput("vuln-scan-output-format", FORMATS, "auto", getInput2);
+      const vulnArgs = ["vuln-scan", "--input", inputFile, "--format", common.format];
+      if (enrich) {
+        vulnArgs.push("--enrich", "--output-format", outputFormat);
+        if (common.outputFile) {
+          vulnArgs.push("--output", common.outputFile);
+        }
+        if (noPreview) {
+          vulnArgs.push("--no-preview");
+        }
+      }
+      if (common.specVersion) {
+        vulnArgs.push("--spec", common.specVersion);
+      }
+      if (common.hfToken) {
+        vulnArgs.push("--hf-token", common.hfToken);
+      }
+      if (common.hfTimeout > 0) {
+        vulnArgs.push("--hf-timeout", String(common.hfTimeout));
+      }
+      vulnArgs.push("--log-level", common.logLevel);
+      args.push(...vulnArgs);
+      return {
+        args,
+        sensitiveValues,
+        expectedOutputFiles: enrich ? [common.outputFile || inputFile] : [],
+        outputDirectory: enrich ? common.outputFile ? import_path4.default.dirname(common.outputFile) : import_path4.default.dirname(inputFile) : DEFAULT_OUTPUT_DIR,
+        outputSuffix: enrich ? common.outputFile ? import_path4.default.basename(common.outputFile) : import_path4.default.basename(inputFile) : ""
+      };
+    }
+    case "merge": {
+      const aibomFiles = parseListInput("merge-aibom-files", getInput2);
+      const sbomFile = getInput2("merge-sbom-file").trim();
+      const mergeOutputFile = getInput2("merge-output-file").trim();
+      const deduplicate = parseBooleanInput("merge-deduplicate", true, getInput2);
+      if (aibomFiles.length === 0) {
+        throw new Error("Input 'merge-aibom-files' is required when command=merge.");
+      }
+      if (!sbomFile) {
+        throw new Error("Input 'merge-sbom-file' is required when command=merge.");
+      }
+      if (!mergeOutputFile) {
+        throw new Error("Input 'merge-output-file' is required when command=merge.");
+      }
+      const mergeArgs = ["merge"];
+      for (const aibomFile of aibomFiles) {
+        mergeArgs.push("--aibom", aibomFile);
+      }
+      mergeArgs.push("--sbom", sbomFile, "--output", mergeOutputFile, "--format", common.format);
+      if (!deduplicate) {
+        mergeArgs.push("--deduplicate=false");
+      }
+      mergeArgs.push("--log-level", common.logLevel);
+      args.push(...mergeArgs);
+      return {
+        args,
+        sensitiveValues,
+        expectedOutputFiles: [mergeOutputFile],
+        outputDirectory: import_path4.default.dirname(mergeOutputFile),
+        outputSuffix: import_path4.default.basename(mergeOutputFile)
+      };
+    }
+    case "download":
+      return {
+        args,
+        sensitiveValues,
+        expectedOutputFiles: [],
+        outputDirectory: DEFAULT_OUTPUT_DIR,
+        outputSuffix: ""
+      };
+    default:
+      throw new Error(`Unsupported command '${command2}'.`);
+  }
+}
+async function runCliCommand(command2) {
+  const cmd = await getAIBoMGenCommand();
+  const build = buildCommandArgs(command2);
+  const redactedCommand = redactText(`${cmd} ${build.args.join(" ")}`.trim(), build.sensitiveValues);
+  info(`[command] ${redactedCommand}`);
+  const stderrChunks = [];
   const exitCode = await group(
-    "Executing aibomgen-cli scan...",
-    async () => execute(cmd, args, {
+    `Executing aibomgen-cli ${command2}...`,
+    async () => execute(cmd, build.args, {
       listeners: {
         stdout(buffer2) {
-          info(buffer2.toString());
+          info(redactText(buffer2.toString(), build.sensitiveValues));
         },
         stderr(buffer2) {
-          info(buffer2.toString());
+          const text = redactText(buffer2.toString(), build.sensitiveValues);
+          stderrChunks.push(text);
+          info(text);
         },
         debug(message) {
-          debug(message);
+          debug(redactText(message, build.sensitiveValues));
         }
       }
     })
   );
   if (exitCode > 0) {
-    throw new Error("aibomgen-cli scan failed");
+    const stderrTail = stderrChunks.join("\n").slice(-4e3);
+    throw new Error(
+      `aibomgen-cli ${command2} failed with exit code ${exitCode}.${stderrTail ? `
+${stderrTail}` : ""}`
+    );
   }
-  const aibomSuffix = opts.format === "xml" ? "aibom.xml" : "aibom.json";
-  if (!fs11.existsSync(outputDir)) {
+  if (build.expectedOutputFiles.length > 0) {
+    return build.expectedOutputFiles.filter((f) => fs11.existsSync(f));
+  }
+  if (!build.outputSuffix || !fs11.existsSync(build.outputDirectory)) {
     return [];
   }
-  return fs11.readdirSync(outputDir).filter((f) => f.endsWith(aibomSuffix)).map((f) => import_path4.default.join(outputDir, f));
+  return fs11.readdirSync(build.outputDirectory).filter((f) => f.endsWith(build.outputSuffix)).map((f) => import_path4.default.join(build.outputDirectory, f));
 }
-async function uploadAIBomArtifact(filePaths) {
+async function uploadAIBomArtifact(filePaths, artifactOptions) {
   const { repo } = context2;
-  const client2 = getClient2(repo, getInput("github-token"));
-  const artifactName = getInput("artifact-name") || import_path4.default.basename(import_path4.default.dirname(filePaths[0])) + "-aibom";
-  const retentionDays = parseInt(getInput("upload-artifact-retention") || "0");
+  const token = getInput("github-token");
+  const client2 = getClient2(repo, token);
+  const artifactName = artifactOptions.artifactName || import_path4.default.basename(import_path4.default.dirname(filePaths[0])) + "-aibom";
   info(dashWrap("Uploading workflow artifact"));
-  for (const f of filePaths) info(f);
+  for (const f of filePaths) {
+    info(f);
+  }
   await client2.uploadWorkflowArtifact({
     files: filePaths,
     rootDir: import_path4.default.dirname(filePaths[0]),
     name: artifactName,
-    retention: retentionDays
+    retention: artifactOptions.uploadArtifactRetention
   });
 }
 async function attachReleaseAssets() {
-  const doRelease = (getInput("upload-release-assets") || "true").toLowerCase() === "true";
-  if (!doRelease) {
+  const artifactOptions = getArtifactOptions();
+  if (!artifactOptions.uploadReleaseAssets) {
     return;
   }
   const { eventName, ref, payload, repo } = context2;
   const client2 = getClient2(repo, getInput("github-token"));
-  let release = void 0;
+  let release;
   if (eventName === "release") {
     release = payload.release;
-    debugLog("Got releaseEvent:", release);
-  } else {
-    const releaseRefPrefix = getInput("release-ref-prefix") || "refs/tags/";
-    if (eventName === "push" && ref.startsWith(releaseRefPrefix)) {
-      const tag = ref.substring(releaseRefPrefix.length);
-      release = await client2.findRelease({ tag });
-      debugLog("Found release for ref push:", release);
-    }
+    debugLog("Got release event", release);
+  } else if (eventName === "push" && ref.startsWith(artifactOptions.releaseRefPrefix)) {
+    const tag = ref.substring(artifactOptions.releaseRefPrefix.length);
+    release = await client2.findRelease({ tag });
+    debugLog("Found release for ref push", release);
   }
   if (!release) {
     return;
   }
-  const aibomArtifactInput = getInput("aibom-artifact-match");
-  const artifactPattern = aibomArtifactInput || `^${getArtifactName()}$`;
-  const matcher = new RegExp(artifactPattern);
+  const command2 = parseEnumInput(
+    "command",
+    COMMANDS,
+    "scan",
+    (name) => getInput(name)
+  );
+  const matchPattern = artifactOptions.artifactMatch || getArtifactName(command2);
   const artifacts = await client2.listCurrentWorkflowArtifacts();
-  const matched = artifacts.filter((a) => matcher.test(a.name));
-  if (!matched.length && aibomArtifactInput) {
-    warning(`WARNING: no AIBOMs found matching ${aibomArtifactInput}`);
+  const matched = artifacts.filter(
+    (a) => artifactMatches(a.name, matchPattern, artifactOptions.artifactMatchMode)
+  );
+  if (matched.length === 0) {
+    warning(`No artifacts found for release upload with pattern '${matchPattern}'.`);
     return;
   }
-  info(dashWrap(`Attaching AIBOMs to release: '${release.tag_name}'`));
+  info(dashWrap(`Attaching AIBOMs to release '${release.tag_name}'`));
   for (const artifact of matched) {
     const dir = await client2.downloadWorkflowArtifact(artifact);
-    const files = fs11.readdirSync(dir);
-    for (const fileName of files) {
-      const filePath = import_path4.default.join(dir, fileName);
-      info(filePath);
-      const contents = fs11.readFileSync(filePath);
-      const assets = await client2.listReleaseAssets({ release });
-      const existing = assets.find((a) => a.name === fileName);
-      if (existing) {
-        await client2.deleteReleaseAsset({ release, asset: existing });
+    try {
+      const files = fs11.readdirSync(dir);
+      for (const fileName of files) {
+        const filePath = import_path4.default.join(dir, fileName);
+        const contents = fs11.readFileSync(filePath);
+        const assets = await client2.listReleaseAssets({ release });
+        const existing = assets.find((a) => a.name === fileName);
+        if (existing) {
+          await client2.deleteReleaseAsset({ release, asset: existing });
+        }
+        await client2.uploadReleaseAsset({
+          release,
+          assetName: fileName,
+          contents: contents.toString(),
+          contentType: fileName.endsWith(".xml") ? "application/xml" : "application/json"
+        });
       }
-      await client2.uploadReleaseAsset({
-        release,
-        assetName: fileName,
-        contents: contents.toString(),
-        contentType: fileName.endsWith(".xml") ? "application/xml" : "application/json"
-      });
+    } finally {
+      fs11.rmSync(dir, { recursive: true, force: true });
     }
   }
 }
 async function runAIBoMGenAction() {
   info(dashWrap("Running aibomgen-cli Action"));
-  debugLog("GitHub context:", context2);
+  debugLog("GitHub context", context2);
   const start = Date.now();
-  const doUpload = (getInput("upload-artifact") || "true").toLowerCase() === "true";
-  const hfTimeout = parseInt(getInput("hf-timeout") || "0");
-  const writtenFiles = await executeAIBoMGenScan({
-    input: { path: getInput("path") || "." },
-    format: getAIBomFormat(),
-    specVersion: getInput("spec-version"),
-    outputFile: getInput("output-file"),
-    hfToken: getInput("hf-token"),
-    hfMode: getInput("hf-mode") || "online",
-    hfTimeout,
-    logLevel: getInput("log-level") || "standard",
-    configFile: getInput("config")
-  });
-  info(`AIBOM scan completed in: ${(Date.now() - start) / 1e3}s`);
-  if (writtenFiles.length === 0) {
-    warning(
-      `No AIBOM output files found in output directory \u2014 no models may have been discovered.`
-    );
+  const command2 = getActionCommand();
+  const artifacts = getArtifactOptions();
+  if (command2 === "download") {
+    const cmd = await getAIBoMGenCommand();
+    setOutput("cmd", cmd);
     return;
   }
-  info(`Found ${writtenFiles.length} AIBOM file(s).`);
-  if (doUpload) {
-    await uploadAIBomArtifact(writtenFiles);
+  const writtenFiles = await runCliCommand(command2);
+  info(`aibomgen-cli ${command2} completed in ${(Date.now() - start) / 1e3}s`);
+  setOutput("executed-command", command2);
+  setOutput("written-files", writtenFiles.join("\n"));
+  if (writtenFiles.length === 0) {
+    info("No output files discovered for this command.");
+    return;
+  }
+  info(`Found ${writtenFiles.length} output file(s).`);
+  if (artifacts.uploadArtifact) {
+    await uploadAIBomArtifact(writtenFiles, artifacts);
   }
 }
 async function runAndFailBuildOnException(fn) {
@@ -95153,20 +95493,25 @@ async function runAndFailBuildOnException(fn) {
 }
 
 // src/index.ts
-var run = getInput("run") || "scan";
+var command = getInput("command") || "scan";
 runAndFailBuildOnException(async () => {
-  switch (run) {
+  switch (command) {
     case "scan":
+    case "generate":
+    case "validate":
+    case "completeness":
+    case "vuln-scan":
+    case "merge":
       await runAIBoMGenAction();
       await attachReleaseAssets();
       break;
-    case "download-aibomgen": {
+    case "download": {
       const cmd = await getAIBoMGenCommand();
       setOutput("cmd", cmd);
       break;
     }
     default:
-      setFailed(`Unknown run value: ${run}`);
+      setFailed(`Unknown command value: ${command}`);
   }
 });
 /*! Bundled license information:

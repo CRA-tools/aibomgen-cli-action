@@ -1,72 +1,80 @@
-/**
- * Used for filesystem directory input to the `scan` command.
- * aibomgen-cli scans the directory for Hugging Face model imports in source files.
- */
-export interface AIBoMGenDirectoryInput {
-  path: string;
+export type AIBoMGenCommand =
+  | "download"
+  | "scan"
+  | "generate"
+  | "validate"
+  | "completeness"
+  | "vuln-scan"
+  | "merge";
+
+export type AIBoMGenFormat = "json" | "xml" | "auto";
+export type AIBoMGenLogLevel = "quiet" | "standard" | "debug";
+export type AIBoMGenHFMode = "online" | "dummy";
+
+export interface AIBoMGenCommonCommandOptions {
+  configFile: string;
+  format: AIBoMGenFormat;
+  hfMode: AIBoMGenHFMode;
+  hfTimeout: number;
+  hfToken: string;
+  logLevel: AIBoMGenLogLevel;
+  noSecurityScan: boolean;
+  outputFile: string;
+  specVersion: string;
 }
 
-/**
- * Options for the aibomgen-cli `scan` subcommand.
- *
- * The scan command scans a directory for AI-related imports (e.g. Hugging Face
- * model IDs referenced in Python files) and generates an AIBOM for each
- * discovered model by fetching metadata from the Hugging Face Hub.
- *
- * The generated AIBOM file(s) are written to disk (not stdout). The output
- * path is controlled by `outputFile`; the default when unset is `dist/aibom.json`.
- */
-export interface AIBoMGenOptions {
-  /** Directory to scan for AI imports. Defaults to "." */
-  input: AIBoMGenDirectoryInput;
+export interface AIBoMGenScanCommandOptions extends AIBoMGenCommonCommandOptions {
+  inputPath: string;
+}
 
-  /**
-   * Output BOM format.
-   *   json → CycloneDX JSON
-   *   xml  → CycloneDX XML
-   *   auto → inferred from the output file extension (default)
-   */
-  format: "json" | "xml" | "auto";
+export interface AIBoMGenGenerateCommandOptions extends AIBoMGenCommonCommandOptions {
+  modelIds: string[];
+}
 
-  /**
-   * CycloneDX spec version for the output (e.g. "1.4", "1.5", "1.6").
-   * Omit to use the tool's built-in default.
-   */
-  specVersion: string;
+export interface AIBoMGenValidateCommandOptions {
+  format: AIBoMGenFormat;
+  inputFile: string;
+  logLevel: AIBoMGenLogLevel;
+  minScore?: number;
+  strict: boolean;
+  checkModelCard: boolean;
+}
 
-  /**
-   * Full output file path on the runner (directory is derived from it).
-   * When empty the tool writes to `dist/aibom.json` (or `dist/aibom.xml`).
-   */
-  outputFile: string;
+export interface AIBoMGenCompletenessCommandOptions {
+  format: AIBoMGenFormat;
+  inputFile: string;
+  logLevel: AIBoMGenLogLevel;
+  plainSummary: boolean;
+}
 
-  /**
-   * Hugging Face Hub access token. Required for private models.
-   * Set via the `hf-token` action input.
-   */
-  hfToken: string;
-
-  /**
-   * Hugging Face metadata mode.
-   *   online → fetch live data from the HF Hub (default)
-   *   dummy  → use built-in fixture data (useful for offline testing)
-   */
-  hfMode: "online" | "dummy";
-
-  /**
-   * Timeout in seconds for each Hugging Face API request.
-   * 0 means use the CLI default (10 s).
-   */
+export interface AIBoMGenVulnScanCommandOptions {
+  enrich: boolean;
+  format: AIBoMGenFormat;
   hfTimeout: number;
+  hfToken: string;
+  inputFile: string;
+  logLevel: AIBoMGenLogLevel;
+  noPreview: boolean;
+  outputFile: string;
+  outputFormat: AIBoMGenFormat;
+  specVersion: string;
+}
 
-  /**
-   * Log verbosity passed as --log-level.
-   *   quiet    → suppress all non-error output
-   *   standard → normal progress output (default)
-   *   debug    → verbose debug output
-   */
-  logLevel: "quiet" | "standard" | "debug";
+export interface AIBoMGenMergeCommandOptions {
+  aibomFiles: string[];
+  deduplicate: boolean;
+  format: AIBoMGenFormat;
+  logLevel: AIBoMGenLogLevel;
+  outputFile: string;
+  sbomFile: string;
+}
 
-  /** Path to an aibomgen-cli config file (--config persistent flag). */
-  configFile: string;
+export interface AIBoMGenActionArtifactOptions {
+  artifactMatch: string;
+  artifactMatchMode: "exact" | "glob";
+  artifactName: string;
+  releaseRefPrefix: string;
+  uploadArtifact: boolean;
+  uploadArtifactRetention: number;
+  uploadReleaseAssets: boolean;
 }

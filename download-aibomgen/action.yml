@@ -3,14 +3,14 @@ description: "Downloads aibomgen-cli (a Go CLI tool) to the Action tool cache an
 author: "IDLab Discover"
 
 inputs:
-  run:
+  command:
     required: true
-    description: "The action to run"
-    default: "download-aibomgen"
+    description: "The action command to run"
+    default: "download"
 
   aibomgen-version:
     required: false
-    description: "The version of aibomgen-cli to download (e.g. v0.1.0). Defaults to the bundled version."
+    description: "The version of aibomgen-cli to download (for example v0.2.1). Defaults to the bundled version."
 
 outputs:
   cmd:

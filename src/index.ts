@@ -6,20 +6,25 @@ import {
   runAndFailBuildOnException,
 } from "./github/AIBoMGenGithubAction";
 
-const run = core.getInput("run") || "scan";
+const command = core.getInput("command") || "scan";
 
 runAndFailBuildOnException(async () => {
-  switch (run) {
+  switch (command) {
     case "scan":
+    case "generate":
+    case "validate":
+    case "completeness":
+    case "vuln-scan":
+    case "merge":
       await runAIBoMGenAction();
       await attachReleaseAssets();
       break;
-    case "download-aibomgen": {
+    case "download": {
       const cmd = await getAIBoMGenCommand();
       core.setOutput("cmd", cmd);
       break;
     }
     default:
-      core.setFailed(`Unknown run value: ${run}`);
+      core.setFailed(`Unknown command value: ${command}`);
   }
 });

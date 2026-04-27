@@ -1,86 +1,126 @@
-# AIBoMGen CLI: Generate AIBOM Action
+# AIBoMGen CLI: GitHub Action
 
-A GitHub Action that generates an **AI Bill of Materials (AIBOM)** for Hugging Face models referenced in your repository, using [aibomgen-cli](https://github.com/idlab-discover/aibomgen-cli).
+A GitHub Action wrapper for [aibomgen-cli](https://github.com/idlab-discover/aibomgen-cli) that supports the non-interactive CI workflows for generating, validating, enriching, and merging AIBOM data.
 
 ## Usage
+
+The action is command-based:
+
+- `scan`
+- `generate`
+- `validate`
+- `completeness`
+- `vuln-scan`
+- `merge`
+- `download`
+
+Interactive CLI flows are intentionally not first-class in CI-oriented action usage.
+
+### 1) Scan source tree and upload artifacts
 
 ```yaml
 - uses: idlab-discover/aibomgen-cli-action@main
   with:
-    # Directory to scan for Hugging Face model references.
-    # Default: "."
-    path: .
-
-    # Output format: json | xml | auto
-    # "auto" infers the format from the output-file extension.
-    # Default: "json"
-    format: json
-
-    # CycloneDX spec version to target: 1.4 | 1.5 | 1.6
-    # Default: CLI default (latest)
-    spec-version: ""
-
-    # Path to write the AIBOM file to.
-    # Default: dist/aibom.json (or dist/aibom.xml for xml format)
-    output-file: ""
-
-    # Hugging Face access token. Required for private or gated models.
-    hf-token: ""
-
-    # How to fetch HF model metadata: online | dummy
-    # "dummy" uses built-in fixture data for offline testing.
-    # Default: "online"
+    command: scan
+    scan-input: .
+    format: auto
+    output-file: dist/aibom.json
+    spec-version: "1.6"
     hf-mode: online
-
-    # Timeout in seconds per Hugging Face API request.
-    # Default: 0 (uses CLI default of 10 s)
     hf-timeout: 0
-
-    # Log verbosity: quiet | standard | debug
-    # Default: "standard"
+    no-security-scan: "false"
     log-level: standard
-
-    # Path to an aibomgen-cli config file (passed as --config before the subcommand).
-    config: ""
-
-    # Version tag to download from GitHub Releases, or a GitHub archive URL to
-    # build from source (requires Go on the runner).
-    # Default: "v0.1.0"
-    aibomgen-version: v0.1.0
-
-    # GitHub token for uploading artifacts and attaching release assets.
-    # Default: ${{ github.token }}
-    github-token: ${{ github.token }}
-
-    # Override the workflow artifact name.
-    artifact-name: ""
-
-    # Upload the AIBOM as a downloadable workflow artifact.
-    # Default: "true"
+    aibomgen-version: v0.2.1
     upload-artifact: "true"
-
-    # Artifact retention in days. 0 = repository default (max 90).
-    # Default: 0
-    upload-artifact-retention: 0
-
-    # Attach the AIBOM to a GitHub release when the event is a release or tag push.
-    # Default: "true"
-    # If you want to upload on release:
-    # In the workflow file set:
-    # permissions:
-    #   contents: write  # needed to attach to releases
-    #   actions: read    # needed to list artifacts for release upload
-    upload-release-assets: "true"
-
-    # Regex to filter which artifacts are attached to the release.
-    aibom-artifact-match: ""
-
-    # Ref prefix used to detect tag-based release pushes.
-    # Default: "refs/tags/"
-    release-ref-prefix: refs/tags/
-
-    # Action mode: scan | download-aibomgen
-    # "download-aibomgen" only downloads the CLI and sets the "cmd" output.
-    # Default: "scan"
-    run: scan
+    upload-release-assets: "false"
 ```
+
+### 2) Generate from explicit model IDs
+
+```yaml
+- uses: idlab-discover/aibomgen-cli-action@main
+  with:
+    command: generate
+    generate-model-ids: |
+      google-bert/bert-base-uncased
+      gpt2
+    output-file: dist/generated_aibom.json
+    format: json
+```
+
+### 3) Validate AIBOM and fail CI on strict checks
+
+```yaml
+- uses: idlab-discover/aibomgen-cli-action@main
+  with:
+    command: validate
+    validate-input: dist/generated_aibom.json
+    validate-strict: "true"
+    validate-min-score: "0.6"
+    validate-check-model-card: "true"
+```
+
+### 4) Merge one SBOM with multiple AIBOM files
+
+```yaml
+- uses: idlab-discover/aibomgen-cli-action@main
+  with:
+    command: merge
+    merge-aibom-files: |
+      dist/model1_aibom.json
+      dist/model2_aibom.json
+    merge-sbom-file: dist/sbom.json
+    merge-output-file: dist/merged_bom.json
+```
+
+### 5) Download-only mode
+
+```yaml
+- id: aibomgen
+  uses: idlab-discover/aibomgen-cli-action@main
+  with:
+    command: download
+```
+
+### Release upload permissions
+
+If `upload-release-assets: "true"`, your workflow should grant:
+
+```yaml
+permissions:
+  contents: write
+  actions: read
+```
+
+### Input highlights
+
+- Common: `command`, `aibomgen-version`, `aibomgen-sha256`, `format`, `output-file`, `config`, `log-level`
+- Hugging Face: `hf-token`, `hf-mode`, `hf-timeout`, `no-security-scan`
+- Validate: `validate-input`, `validate-strict`, `validate-min-score`, `validate-check-model-card`
+- Completeness: `completeness-input`, `completeness-plain-summary`
+- Vuln scan: `vuln-scan-input`, `vuln-scan-enrich`, `vuln-scan-no-preview`, `vuln-scan-output-format`
+- Merge: `merge-aibom-files`, `merge-sbom-file`, `merge-output-file`, `merge-deduplicate`
+- Artifact/release: `upload-artifact`, `artifact-name`, `upload-artifact-retention`, `upload-release-assets`, `aibom-artifact-match`, `aibom-artifact-match-mode`, `release-ref-prefix`
+
+### Outputs
+
+- `cmd`: resolved aibomgen-cli path (download command)
+- `executed-command`: command run by action
+- `written-files`: newline-separated discovered output files
+
+### Local validation
+
+Run the same core checks used by CI before opening a PR:
+
+```bash
+npm run build
+npm run lint
+npm test
+npm run package
+```
+
+### Notes
+
+- Default bundled CLI version is `v0.2.1`.
+- `aibomgen-sha256` can be used to verify release archive integrity.
+- Artifact pattern matching mode is constrained to `exact` or `glob` (no raw regex).
