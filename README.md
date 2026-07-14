@@ -206,7 +206,7 @@ permissions:
 ### Artifact and release naming
 
 - For `scan`, `generate`, and `merge`, the action uploads the produced BOM files with their original filenames preserved.
-- The default workflow artifact names are `output-aiboms` for `scan` and `generate`, and `merged` for `merge`.
+- The default workflow artifact names are `output-aiboms` for `scan` and `generate`, `output-aiboms-vuln` for enriched `vuln-scan` output, and `merged` for `merge`.
 - Workflow artifacts are uploaded as a single artifact bundle. If `artifact-name` is set, it changes only the bundle label shown in GitHub Actions, not the filenames inside the bundle.
 - Release uploads use the current run's produced files directly when the workflow is running on a release event or a tag push that resolves to a release.
 - If `generate` produces multiple AIBOM files, all discovered files are uploaded to the workflow artifact and attached to the release.

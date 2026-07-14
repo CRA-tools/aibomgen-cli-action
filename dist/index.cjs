@@ -99197,6 +99197,9 @@ function getArtifactName(command2) {
   if (command2 === "merge") {
     return "merged";
   }
+  if (command2 === "vuln-scan") {
+    return "output-aiboms-vuln";
+  }
   if (command2 === "scan" || command2 === "generate") {
     return "output-aiboms";
   }

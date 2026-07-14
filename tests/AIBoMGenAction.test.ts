@@ -260,6 +260,7 @@ describe("AIBoMGen Action safety helpers", () => {
   it("uses requested default artifact names for scan generate and merge", () => {
     assert.equal(__test.getArtifactName("scan"), "output-aiboms");
     assert.equal(__test.getArtifactName("generate"), "output-aiboms");
+    assert.equal(__test.getArtifactName("vuln-scan"), "output-aiboms-vuln");
     assert.equal(__test.getArtifactName("merge"), "merged");
   });
 

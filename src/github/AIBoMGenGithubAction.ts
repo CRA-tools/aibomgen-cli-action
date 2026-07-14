@@ -294,6 +294,10 @@ function getArtifactName(command: AIBoMGenCommand): string {
     return "merged";
   }
 
+  if (command === "vuln-scan") {
+    return "output-aiboms-vuln";
+  }
+
   if (command === "scan" || command === "generate") {
     return "output-aiboms";
   }
