@@ -95106,6 +95106,12 @@ function getArtifactName(command2) {
   if (fileName) {
     return fileName;
   }
+  if (command2 === "merge") {
+    return "merged";
+  }
+  if (command2 === "scan" || command2 === "generate") {
+    return "output-aiboms";
+  }
   const {
     repo: { repo },
     job
@@ -95426,11 +95432,11 @@ ${stderrTail}` : ""}`
   }
   return fs11.readdirSync(build.outputDirectory).filter((f) => f.endsWith(build.outputSuffix)).map((f) => import_path4.default.join(build.outputDirectory, f));
 }
-async function uploadAIBomArtifact(filePaths, artifactOptions) {
+async function uploadAIBomArtifact(command2, filePaths, artifactOptions) {
   const { repo } = context2;
   const token = getInput("github-token");
   const client2 = getClient2(repo, token);
-  const artifactName = artifactOptions.artifactName || import_path4.default.basename(import_path4.default.dirname(filePaths[0])) + "-aibom";
+  const artifactName = artifactOptions.artifactName || getArtifactName(command2);
   const rootDir = getArtifactRootDir(filePaths);
   info(dashWrap("Uploading workflow artifact"));
   for (const f of filePaths) {
@@ -95548,7 +95554,7 @@ async function runAIBoMGenAction() {
   }
   info(`Found ${writtenFiles.length} output file(s).`);
   if (artifacts.uploadArtifact) {
-    await uploadAIBomArtifact(writtenFiles, artifacts);
+    await uploadAIBomArtifact(command2, writtenFiles, artifacts);
   }
   return {
     artifactName: artifacts.artifactName || getArtifactName(command2),

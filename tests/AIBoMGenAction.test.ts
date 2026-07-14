@@ -192,6 +192,12 @@ describe("AIBoMGen Action command argument builder", () => {
 });
 
 describe("AIBoMGen Action safety helpers", () => {
+  it("uses requested default artifact names for scan generate and merge", () => {
+    assert.equal(__test.getArtifactName("scan"), "output-aiboms");
+    assert.equal(__test.getArtifactName("generate"), "output-aiboms");
+    assert.equal(__test.getArtifactName("merge"), "merged");
+  });
+
   it("supports exact and glob artifact matching", () => {
     assert.equal(
       __test.artifactMatches("repo-job-scan-aibom", "repo-job-scan-aibom", "exact"),

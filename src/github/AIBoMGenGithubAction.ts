@@ -290,6 +290,14 @@ function getArtifactName(command: AIBoMGenCommand): string {
     return fileName;
   }
 
+  if (command === "merge") {
+    return "merged";
+  }
+
+  if (command === "scan" || command === "generate") {
+    return "output-aiboms";
+  }
+
   const {
     repo: { repo },
     job,
@@ -647,6 +655,7 @@ function buildCommandArgs(
 export const __test = {
   artifactMatches,
   buildCommandArgs,
+  getArtifactName,
   getArtifactRootDir,
   getCurrentRunReleaseAssetFiles,
   globToRegExp,
@@ -704,12 +713,16 @@ async function runCliCommand(command: AIBoMGenCommand): Promise<string[]> {
     .map((f) => path.join(build.outputDirectory, f));
 }
 
-async function uploadAIBomArtifact(filePaths: string[], artifactOptions: AIBoMGenActionArtifactOptions): Promise<void> {
+async function uploadAIBomArtifact(
+  command: AIBoMGenCommand,
+  filePaths: string[],
+  artifactOptions: AIBoMGenActionArtifactOptions,
+): Promise<void> {
   const { repo } = github.context;
   const token = core.getInput("github-token");
   const client = getClient(repo, token);
 
-  const artifactName = artifactOptions.artifactName || path.basename(path.dirname(filePaths[0])) + "-aibom";
+  const artifactName = artifactOptions.artifactName || getArtifactName(command);
   const rootDir = getArtifactRootDir(filePaths);
 
   core.info(dashWrap("Uploading workflow artifact"));
@@ -859,7 +872,7 @@ export async function runAIBoMGenAction(): Promise<AIBoMGenActionOutputs> {
   core.info(`Found ${writtenFiles.length} output file(s).`);
 
   if (artifacts.uploadArtifact) {
-    await uploadAIBomArtifact(writtenFiles, artifacts);
+    await uploadAIBomArtifact(command, writtenFiles, artifacts);
   }
 
   return {
