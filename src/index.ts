@@ -16,8 +16,7 @@ runAndFailBuildOnException(async () => {
     case "completeness":
     case "vuln-scan":
     case "merge":
-      await runAIBoMGenAction();
-      await attachReleaseAssets();
+      await attachReleaseAssets(await runAIBoMGenAction());
       break;
     case "download": {
       const cmd = await getAIBoMGenCommand();

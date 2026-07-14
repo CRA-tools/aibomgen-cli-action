@@ -104,6 +104,14 @@ permissions:
   actions: read
 ```
 
+### Artifact and release naming
+
+- For `scan`, `generate`, and `merge`, the action uploads the produced BOM files with their original filenames preserved.
+- Workflow artifacts are uploaded as a single artifact bundle. If `artifact-name` is set, it changes only the bundle label shown in GitHub Actions, not the filenames inside the bundle.
+- Release uploads use the current run's produced files directly when the workflow is running on a release event or a tag push that resolves to a release.
+- If `generate` produces multiple AIBOM files, all discovered files are uploaded to the workflow artifact and attached to the release.
+- `aibom-artifact-match` remains available as a fallback for release attachment when current-run output files are not available.
+
 ### Input highlights
 
 - Common: `command`, `aibomgen-version`, `aibomgen-sha256`, `format`, `output-file`, `config`, `log-level`
@@ -112,7 +120,7 @@ permissions:
 - Completeness: `completeness-input`, `completeness-plain-summary`
 - Vuln scan: `vuln-scan-input`, `vuln-scan-enrich`, `vuln-scan-no-preview`, `vuln-scan-output-format`
 - Merge: `merge-aibom-files`, `merge-sbom-file`, `merge-output-file`, `merge-deduplicate`
-- Artifact/release: `upload-artifact`, `artifact-name`, `upload-artifact-retention`, `upload-release-assets`, `aibom-artifact-match`, `aibom-artifact-match-mode`, `release-ref-prefix`
+- Artifact/release: `upload-artifact`, `artifact-name` (bundle label only), `upload-artifact-retention`, `upload-release-assets`, `aibom-artifact-match` (fallback release lookup), `aibom-artifact-match-mode`, `release-ref-prefix`
 
 ### Outputs
 

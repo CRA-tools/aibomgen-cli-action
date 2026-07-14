@@ -1,4 +1,7 @@
 import assert from "node:assert";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { beforeEach, describe, it } from "node:test";
 import { __test } from "../src/github/AIBoMGenGithubAction";
 
@@ -174,5 +177,46 @@ describe("AIBoMGen Action safety helpers", () => {
     assert.equal(redacted.includes("my-secret-token"), false);
     assert.equal(redacted.includes("/tmp/config.yml"), false);
     assert.equal(redacted.includes("***"), true);
+  });
+
+  it("finds a shared artifact root for files across directories", () => {
+    const rootDir = __test.getArtifactRootDir([
+      "dist/aibom/model-a.json",
+      "dist/sbom/merged.xml",
+    ]);
+
+    assert.equal(rootDir, path.resolve("dist"));
+  });
+
+  it("filters missing current-run release files", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "aibomgen-current-run-"));
+    const existingFile = path.join(tmpDir, "aibom.json");
+    fs.writeFileSync(existingFile, "{}");
+
+    const releaseFiles = __test.getCurrentRunReleaseAssetFiles({
+      command: "scan",
+      writtenFiles: [existingFile, path.join(tmpDir, "missing.json")],
+    });
+
+    assert.deepEqual(releaseFiles, [path.resolve(existingFile)]);
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("recursively lists files from downloaded artifact contents", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "aibomgen-artifact-files-"));
+    const nestedDir = path.join(tmpDir, "nested");
+    const topLevelFile = path.join(tmpDir, "aibom.json");
+    const nestedFile = path.join(nestedDir, "merged.xml");
+
+    fs.mkdirSync(nestedDir, { recursive: true });
+    fs.writeFileSync(topLevelFile, "{}");
+    fs.writeFileSync(nestedFile, "<bom />");
+
+    const files = __test.listFilesRecursive(tmpDir).sort();
+
+    assert.deepEqual(files, [nestedFile, topLevelFile].sort());
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });

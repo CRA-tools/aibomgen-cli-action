@@ -140,12 +140,12 @@ inputs:
     default: ${{ github.token }}
 
   artifact-name:
-    description: "The name to use for the uploaded workflow artifact"
+    description: "Optional label for the uploaded workflow artifact bundle; produced BOM files keep their original filenames inside the artifact"
     required: false
 
   upload-artifact:
     required: false
-    description: "Upload generated output files as a workflow artifact"
+    description: "Upload produced output files as a workflow artifact bundle while preserving each file's original filename"
     default: "true"
 
   upload-artifact-retention:
@@ -157,16 +157,16 @@ inputs:
 
   upload-release-assets:
     required: false
-    description: "Attach matched workflow artifacts to a release on release/tag events"
+    description: "Attach produced output files to a release on release/tag events using their original filenames"
     default: "true"
 
   aibom-artifact-match:
     required: false
-    description: "Pattern used to select artifacts for release upload"
+    description: "Fallback pattern used to select workflow artifacts for release upload when current-run output files are not available"
 
   aibom-artifact-match-mode:
     required: false
-    description: "Pattern mode for aibom-artifact-match: exact or glob"
+    description: "Pattern mode for the fallback aibom-artifact-match lookup: exact or glob"
     default: "exact"
 
   release-ref-prefix:

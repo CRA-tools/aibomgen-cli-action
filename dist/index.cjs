@@ -95112,6 +95112,35 @@ function getArtifactName(command2) {
   } = context2;
   return `${repo}-${job}-${command2}-aibom`;
 }
+function getArtifactRootDir(filePaths) {
+  if (filePaths.length === 0) {
+    return DEFAULT_OUTPUT_DIR;
+  }
+  const directories = filePaths.map((filePath) => import_path4.default.resolve(import_path4.default.dirname(filePath)));
+  let currentRoot = directories[0];
+  for (const directory of directories.slice(1)) {
+    let candidate = currentRoot;
+    while (!directory.startsWith(`${candidate}${import_path4.default.sep}`) && directory !== candidate) {
+      const parent = import_path4.default.dirname(candidate);
+      if (parent === candidate) {
+        candidate = parent;
+        break;
+      }
+      candidate = parent;
+    }
+    currentRoot = candidate;
+  }
+  return currentRoot;
+}
+function listFilesRecursive(directory) {
+  return fs11.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = import_path4.default.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      return listFilesRecursive(entryPath);
+    }
+    return [entryPath];
+  });
+}
 function buildCommonCommandArgs(getInput2, setSecret2) {
   const format = parseEnumInput("format", FORMATS, "auto", getInput2);
   const hfMode = parseEnumInput("hf-mode", HF_MODES, "online", getInput2);
@@ -95384,18 +95413,46 @@ async function uploadAIBomArtifact(filePaths, artifactOptions) {
   const token = getInput("github-token");
   const client2 = getClient2(repo, token);
   const artifactName = artifactOptions.artifactName || import_path4.default.basename(import_path4.default.dirname(filePaths[0])) + "-aibom";
+  const rootDir = getArtifactRootDir(filePaths);
   info(dashWrap("Uploading workflow artifact"));
   for (const f of filePaths) {
     info(f);
   }
   await client2.uploadWorkflowArtifact({
     files: filePaths,
-    rootDir: import_path4.default.dirname(filePaths[0]),
+    rootDir,
     name: artifactName,
     retention: artifactOptions.uploadArtifactRetention
   });
 }
-async function attachReleaseAssets() {
+function getCurrentRunReleaseAssetFiles(currentRun) {
+  if (!currentRun) {
+    return [];
+  }
+  return currentRun.writtenFiles.filter((filePath) => fs11.existsSync(filePath)).map((filePath) => import_path4.default.resolve(filePath));
+}
+async function uploadReleaseFiles({
+  filePaths,
+  release
+}) {
+  const { repo } = context2;
+  const client2 = getClient2(repo, getInput("github-token"));
+  const assets = await client2.listReleaseAssets({ release });
+  for (const filePath of filePaths) {
+    const assetName = import_path4.default.basename(filePath);
+    const existing = assets.find((asset) => asset.name === assetName);
+    if (existing) {
+      await client2.deleteReleaseAsset({ release, asset: existing });
+    }
+    await client2.uploadReleaseAsset({
+      release,
+      assetName,
+      contents: fs11.readFileSync(filePath).toString(),
+      contentType: assetName.endsWith(".xml") ? "application/xml" : "application/json"
+    });
+  }
+}
+async function attachReleaseAssets(currentRun) {
   const artifactOptions = getArtifactOptions();
   if (!artifactOptions.uploadReleaseAssets) {
     return;
@@ -95412,6 +95469,12 @@ async function attachReleaseAssets() {
     debugLog("Found release for ref push", release);
   }
   if (!release) {
+    return;
+  }
+  const currentRunFiles = getCurrentRunReleaseAssetFiles(currentRun);
+  if (currentRunFiles.length > 0) {
+    info(dashWrap(`Attaching current run AIBOMs to release '${release.tag_name}'`));
+    await uploadReleaseFiles({ filePaths: currentRunFiles, release });
     return;
   }
   const command2 = parseEnumInput(
@@ -95433,22 +95496,8 @@ async function attachReleaseAssets() {
   for (const artifact of matched) {
     const dir = await client2.downloadWorkflowArtifact(artifact);
     try {
-      const files = fs11.readdirSync(dir);
-      for (const fileName of files) {
-        const filePath = import_path4.default.join(dir, fileName);
-        const contents = fs11.readFileSync(filePath);
-        const assets = await client2.listReleaseAssets({ release });
-        const existing = assets.find((a) => a.name === fileName);
-        if (existing) {
-          await client2.deleteReleaseAsset({ release, asset: existing });
-        }
-        await client2.uploadReleaseAsset({
-          release,
-          assetName: fileName,
-          contents: contents.toString(),
-          contentType: fileName.endsWith(".xml") ? "application/xml" : "application/json"
-        });
-      }
+      const files = listFilesRecursive(dir);
+      await uploadReleaseFiles({ filePaths: files, release });
     } finally {
       fs11.rmSync(dir, { recursive: true, force: true });
     }
@@ -95463,7 +95512,10 @@ async function runAIBoMGenAction() {
   if (command2 === "download") {
     const cmd = await getAIBoMGenCommand();
     setOutput("cmd", cmd);
-    return;
+    return {
+      command: command2,
+      writtenFiles: []
+    };
   }
   const writtenFiles = await runCliCommand(command2);
   info(`aibomgen-cli ${command2} completed in ${(Date.now() - start) / 1e3}s`);
@@ -95471,12 +95523,20 @@ async function runAIBoMGenAction() {
   setOutput("written-files", writtenFiles.join("\n"));
   if (writtenFiles.length === 0) {
     info("No output files discovered for this command.");
-    return;
+    return {
+      command: command2,
+      writtenFiles
+    };
   }
   info(`Found ${writtenFiles.length} output file(s).`);
   if (artifacts.uploadArtifact) {
     await uploadAIBomArtifact(writtenFiles, artifacts);
   }
+  return {
+    artifactName: artifacts.artifactName || getArtifactName(command2),
+    command: command2,
+    writtenFiles
+  };
 }
 async function runAndFailBuildOnException(fn) {
   try {
@@ -95502,8 +95562,7 @@ runAndFailBuildOnException(async () => {
     case "completeness":
     case "vuln-scan":
     case "merge":
-      await runAIBoMGenAction();
-      await attachReleaseAssets();
+      await attachReleaseAssets(await runAIBoMGenAction());
       break;
     case "download": {
       const cmd = await getAIBoMGenCommand();

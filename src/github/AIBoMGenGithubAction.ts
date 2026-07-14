@@ -50,6 +50,12 @@ type BuildCommandResult = {
   outputSuffix: string;
 };
 
+export type AIBoMGenActionOutputs = {
+  artifactName?: string;
+  command: AIBoMGenCommand;
+  writtenFiles: string[];
+};
+
 function parseBooleanInput(name: string, defaultValue: boolean, getInput: InputGetter): boolean {
   const raw = getInput(name);
   if (!raw) {
@@ -289,6 +295,40 @@ function getArtifactName(command: AIBoMGenCommand): string {
   } = github.context;
 
   return `${repo}-${job}-${command}-aibom`;
+}
+
+function getArtifactRootDir(filePaths: string[]): string {
+  if (filePaths.length === 0) {
+    return DEFAULT_OUTPUT_DIR;
+  }
+
+  const directories = filePaths.map((filePath) => path.resolve(path.dirname(filePath)));
+  let currentRoot = directories[0];
+
+  for (const directory of directories.slice(1)) {
+    let candidate = currentRoot;
+    while (!directory.startsWith(`${candidate}${path.sep}`) && directory !== candidate) {
+      const parent = path.dirname(candidate);
+      if (parent === candidate) {
+        candidate = parent;
+        break;
+      }
+      candidate = parent;
+    }
+    currentRoot = candidate;
+  }
+
+  return currentRoot;
+}
+
+function listFilesRecursive(directory: string): string[] {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      return listFilesRecursive(entryPath);
+    }
+    return [entryPath];
+  });
 }
 
 function buildCommonCommandArgs(
@@ -590,7 +630,10 @@ function buildCommandArgs(
 export const __test = {
   artifactMatches,
   buildCommandArgs,
+  getArtifactRootDir,
+  getCurrentRunReleaseAssetFiles,
   globToRegExp,
+  listFilesRecursive,
   redactText,
 };
 
@@ -648,6 +691,7 @@ async function uploadAIBomArtifact(filePaths: string[], artifactOptions: AIBoMGe
   const client = getClient(repo, token);
 
   const artifactName = artifactOptions.artifactName || path.basename(path.dirname(filePaths[0])) + "-aibom";
+  const rootDir = getArtifactRootDir(filePaths);
 
   core.info(dashWrap("Uploading workflow artifact"));
   for (const f of filePaths) {
@@ -656,13 +700,50 @@ async function uploadAIBomArtifact(filePaths: string[], artifactOptions: AIBoMGe
 
   await client.uploadWorkflowArtifact({
     files: filePaths,
-    rootDir: path.dirname(filePaths[0]),
+    rootDir,
     name: artifactName,
     retention: artifactOptions.uploadArtifactRetention,
   });
 }
 
-export async function attachReleaseAssets(): Promise<void> {
+function getCurrentRunReleaseAssetFiles(currentRun?: AIBoMGenActionOutputs): string[] {
+  if (!currentRun) {
+    return [];
+  }
+
+  return currentRun.writtenFiles
+    .filter((filePath) => fs.existsSync(filePath))
+    .map((filePath) => path.resolve(filePath));
+}
+
+async function uploadReleaseFiles({
+  filePaths,
+  release,
+}: {
+  filePaths: string[];
+  release: Release;
+}): Promise<void> {
+  const { repo } = github.context;
+  const client = getClient(repo, core.getInput("github-token"));
+  const assets = await client.listReleaseAssets({ release });
+
+  for (const filePath of filePaths) {
+    const assetName = path.basename(filePath);
+    const existing = assets.find((asset) => asset.name === assetName);
+    if (existing) {
+      await client.deleteReleaseAsset({ release, asset: existing });
+    }
+
+    await client.uploadReleaseAsset({
+      release,
+      assetName,
+      contents: fs.readFileSync(filePath).toString(),
+      contentType: assetName.endsWith(".xml") ? "application/xml" : "application/json",
+    });
+  }
+}
+
+export async function attachReleaseAssets(currentRun?: AIBoMGenActionOutputs): Promise<void> {
   const artifactOptions = getArtifactOptions();
   if (!artifactOptions.uploadReleaseAssets) {
     return;
@@ -683,6 +764,13 @@ export async function attachReleaseAssets(): Promise<void> {
   }
 
   if (!release) {
+    return;
+  }
+
+  const currentRunFiles = getCurrentRunReleaseAssetFiles(currentRun);
+  if (currentRunFiles.length > 0) {
+    core.info(dashWrap(`Attaching current run AIBOMs to release '${release.tag_name}'`));
+    await uploadReleaseFiles({ filePaths: currentRunFiles, release });
     return;
   }
 
@@ -709,31 +797,15 @@ export async function attachReleaseAssets(): Promise<void> {
   for (const artifact of matched) {
     const dir = await client.downloadWorkflowArtifact(artifact);
     try {
-      const files = fs.readdirSync(dir);
-      for (const fileName of files) {
-        const filePath = path.join(dir, fileName);
-        const contents = fs.readFileSync(filePath);
-
-        const assets = await client.listReleaseAssets({ release });
-        const existing = assets.find((a) => a.name === fileName);
-        if (existing) {
-          await client.deleteReleaseAsset({ release, asset: existing });
-        }
-
-        await client.uploadReleaseAsset({
-          release,
-          assetName: fileName,
-          contents: contents.toString(),
-          contentType: fileName.endsWith(".xml") ? "application/xml" : "application/json",
-        });
-      }
+      const files = listFilesRecursive(dir);
+      await uploadReleaseFiles({ filePaths: files, release });
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   }
 }
 
-export async function runAIBoMGenAction(): Promise<void> {
+export async function runAIBoMGenAction(): Promise<AIBoMGenActionOutputs> {
   core.info(dashWrap("Running aibomgen-cli Action"));
   debugLog("GitHub context", github.context);
 
@@ -744,7 +816,10 @@ export async function runAIBoMGenAction(): Promise<void> {
   if (command === "download") {
     const cmd = await getAIBoMGenCommand();
     core.setOutput("cmd", cmd);
-    return;
+    return {
+      command,
+      writtenFiles: [],
+    };
   }
 
   const writtenFiles = await runCliCommand(command);
@@ -756,7 +831,10 @@ export async function runAIBoMGenAction(): Promise<void> {
 
   if (writtenFiles.length === 0) {
     core.info("No output files discovered for this command.");
-    return;
+    return {
+      command,
+      writtenFiles,
+    };
   }
 
   core.info(`Found ${writtenFiles.length} output file(s).`);
@@ -764,6 +842,12 @@ export async function runAIBoMGenAction(): Promise<void> {
   if (artifacts.uploadArtifact) {
     await uploadAIBomArtifact(writtenFiles, artifacts);
   }
+
+  return {
+    artifactName: artifacts.artifactName || getArtifactName(command),
+    command,
+    writtenFiles,
+  };
 }
 
 export async function runAndFailBuildOnException<T>(fn: () => Promise<T>): Promise<T | void> {
