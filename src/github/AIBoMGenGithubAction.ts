@@ -443,6 +443,10 @@ function buildCommandArgs(
 
   switch (command) {
     case "scan": {
+      if (common.outputFile) {
+        throw new Error("Input 'output-file' is not supported when command=scan. Scan writes one AIBOM per discovered model.");
+      }
+
       const inputPath = getInput("scan-input") || ".";
       const scanArgs = ["scan", "--input", inputPath.trim()];
       applyScanLikeFlags(scanArgs, common, getInput);
@@ -452,8 +456,8 @@ function buildCommandArgs(
         args,
         argsList: [args],
         sensitiveValues,
-        expectedOutputFiles: common.outputFile ? [common.outputFile] : [],
-        outputDirectory: common.outputFile ? path.dirname(common.outputFile) : DEFAULT_OUTPUT_DIR,
+        expectedOutputFiles: [],
+        outputDirectory: DEFAULT_OUTPUT_DIR,
         outputSuffix: common.format === "xml" ? "aibom.xml" : "aibom.json",
       };
     }

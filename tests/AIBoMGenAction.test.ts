@@ -34,18 +34,26 @@ describe("AIBoMGen Action command argument builder", () => {
     );
   });
 
-  it("builds scan args with input and output", () => {
+  it("builds scan args with input", () => {
     inputMap["scan-input"] = "./repo";
-    inputMap["output-file"] = "dist/out.json";
 
     const result = __test.buildCommandArgs("scan", getInput, () => {});
 
     assert.ok(result.args.includes("scan"));
     assert.ok(result.args.includes("--input"));
     assert.ok(result.args.includes("./repo"));
-    assert.ok(result.args.includes("--output"));
-    assert.ok(result.args.includes("dist/out.json"));
-    assert.deepEqual(result.expectedOutputFiles, ["dist/out.json"]);
+    assert.equal(result.args.includes("--output"), false);
+    assert.deepEqual(result.expectedOutputFiles, []);
+  });
+
+  it("rejects output-file for scan", () => {
+    inputMap["scan-input"] = "./repo";
+    inputMap["output-file"] = "dist/out.json";
+
+    assert.throws(
+      () => __test.buildCommandArgs("scan", getInput, () => {}),
+      /output-file.*not supported.*command=scan/i,
+    );
   });
 
   it("builds generate args with multiple model IDs", () => {

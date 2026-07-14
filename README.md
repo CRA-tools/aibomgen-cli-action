@@ -28,26 +28,98 @@ The action is command-based:
 
 Interactive CLI flows are intentionally not first-class in CI-oriented action usage.
 
-### 1) Scan source tree and upload artifacts
+### Recommended workflow
+
+For most repositories, the recommended pattern is:
+
+1. `scan` the repository and let the action discover one AIBOM per model
+2. `validate` the discovered files using the `written-files` output
+3. generate an SBOM with Syft
+4. `merge` the discovered AIBOMs with the SBOM
+
+This keeps multi-model output, validation, artifact upload, and release asset upload aligned.
 
 ```yaml
-- uses: idlab-discover/aibomgen-cli-action@main
-  with:
-    command: scan
-    scan-input: .
-    format: auto
-    output-file: dist/aibom.json
-    spec-version: "1.6"
-    hf-mode: online
-    hf-timeout: 0
-    no-security-scan: "false"
-    log-level: standard
-    aibomgen-version: v0.2.1
-    upload-artifact: "true"
-    upload-release-assets: "false"
+name: Generate AIBOM
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  generate-aibom:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Scan repository and generate AIBOMs
+        id: scan
+        uses: CRA-tools/aibomgen-cli-action@main
+        with:
+          command: scan
+          scan-input: .
+          format: json
+          spec-version: "1.6"
+          hf-mode: online
+          no-security-scan: "false"
+          log-level: standard
+          aibomgen-version: v0.2.1
+          upload-artifact: "true"
+          upload-release-assets: "true"
+
+      - name: Validate discovered AIBOMs
+        uses: CRA-tools/aibomgen-cli-action@main
+        with:
+          command: validate
+          validate-input: ${{ steps.scan.outputs.written-files }}
+          validate-strict: "true"
+          validate-min-score: "0.1"
+          validate-check-model-card: "true"
+          log-level: standard
+          aibomgen-version: v0.2.1
+
+      - name: Generate SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          upload-artifact: "false"
+          output-file: sbom.cdx.json
+          format: cyclonedx-json
+
+      - name: Merge AIBOMs with SBOM and generate final BOM
+        id: merge
+        uses: CRA-tools/aibomgen-cli-action@main
+        with:
+          command: merge
+          merge-aibom-files: ${{ steps.scan.outputs.written-files }}
+          merge-sbom-file: sbom.cdx.json
+          merge-output-file: final_bom.json
+          format: json
+          log-level: standard
+          aibomgen-version: v0.2.1
+          upload-artifact: "true"
+          upload-release-assets: "true"
 ```
 
-### 2) Generate from explicit model IDs
+The workflow above already demonstrates the main commands used in CI: `scan`, `validate`, and `merge`.
+
+Use the additional examples below for commands that are typically run on existing AIBOM files outside the main scan-to-merge flow.
+
+### Additional command examples
+
+#### Generate from explicit model IDs
 
 ```yaml
 - uses: idlab-discover/aibomgen-cli-action@main
@@ -59,7 +131,7 @@ Interactive CLI flows are intentionally not first-class in CI-oriented action us
     format: json
 ```
 
-### 3) Validate AIBOM and fail CI on strict checks
+#### Validate existing AIBOM files
 
 ```yaml
 - uses: idlab-discover/aibomgen-cli-action@main
@@ -73,7 +145,7 @@ Interactive CLI flows are intentionally not first-class in CI-oriented action us
     validate-check-model-card: "true"
 ```
 
-### 4) Merge one SBOM with multiple AIBOM files
+#### Merge one SBOM with multiple AIBOM files
 
 ```yaml
 - uses: idlab-discover/aibomgen-cli-action@main
@@ -86,7 +158,32 @@ Interactive CLI flows are intentionally not first-class in CI-oriented action us
     merge-output-file: dist/merged_bom.json
 ```
 
-### 5) Download-only mode
+#### Enrich an existing AIBOM with vulnerability findings
+
+```yaml
+- uses: idlab-discover/aibomgen-cli-action@main
+  with:
+    command: vuln-scan
+    vuln-scan-input: dist/model_aibom.json
+    vuln-scan-enrich: "true"
+    vuln-scan-no-preview: "true"
+    vuln-scan-output-format: json
+    output-file: dist/model_aibom.enriched.json
+    log-level: standard
+```
+
+#### Check completeness for an existing AIBOM
+
+```yaml
+- uses: idlab-discover/aibomgen-cli-action@main
+  with:
+    command: completeness
+    completeness-input: dist/model_aibom.json
+    completeness-plain-summary: "true"
+    format: json
+```
+
+#### Download-only mode
 
 ```yaml
 - id: aibomgen
@@ -108,21 +205,11 @@ permissions:
 ### Artifact and release naming
 
 - For `scan`, `generate`, and `merge`, the action uploads the produced BOM files with their original filenames preserved.
+- The default workflow artifact names are `output-aiboms` for `scan` and `generate`, and `merged` for `merge`.
 - Workflow artifacts are uploaded as a single artifact bundle. If `artifact-name` is set, it changes only the bundle label shown in GitHub Actions, not the filenames inside the bundle.
 - Release uploads use the current run's produced files directly when the workflow is running on a release event or a tag push that resolves to a release.
 - If `generate` produces multiple AIBOM files, all discovered files are uploaded to the workflow artifact and attached to the release.
-- `generate` does not support `output-file`; it writes per-model AIBOM files so they can be validated, merged, and uploaded individually.
 - `aibom-artifact-match` remains available as a fallback for release attachment when current-run output files are not available.
-
-### Input highlights
-
-- Common: `command`, `aibomgen-version`, `aibomgen-sha256`, `format`, `output-file`, `config`, `log-level`
-- Hugging Face: `hf-token`, `hf-mode`, `hf-timeout`, `no-security-scan`
-- Validate: `validate-input` (single file or comma/newline-separated files), `validate-strict`, `validate-min-score`, `validate-check-model-card`
-- Completeness: `completeness-input`, `completeness-plain-summary`
-- Vuln scan: `vuln-scan-input`, `vuln-scan-enrich`, `vuln-scan-no-preview`, `vuln-scan-output-format`
-- Merge: `merge-aibom-files`, `merge-sbom-file`, `merge-output-file`, `merge-deduplicate`
-- Artifact/release: `upload-artifact`, `artifact-name` (bundle label only), `upload-artifact-retention`, `upload-release-assets`, `aibom-artifact-match` (fallback release lookup), `aibom-artifact-match-mode`, `release-ref-prefix`
 
 ### Outputs
 

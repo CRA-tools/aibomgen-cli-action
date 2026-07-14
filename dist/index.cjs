@@ -99300,6 +99300,9 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
   const sensitiveValues = [common.hfToken, common.configFile].filter((v) => Boolean(v));
   switch (command2) {
     case "scan": {
+      if (common.outputFile) {
+        throw new Error("Input 'output-file' is not supported when command=scan. Scan writes one AIBOM per discovered model.");
+      }
       const inputPath = getInput2("scan-input") || ".";
       const scanArgs = ["scan", "--input", inputPath.trim()];
       applyScanLikeFlags(scanArgs, common, getInput2);
@@ -99308,8 +99311,8 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
         args,
         argsList: [args],
         sensitiveValues,
-        expectedOutputFiles: common.outputFile ? [common.outputFile] : [],
-        outputDirectory: common.outputFile ? import_path4.default.dirname(common.outputFile) : DEFAULT_OUTPUT_DIR,
+        expectedOutputFiles: [],
+        outputDirectory: DEFAULT_OUTPUT_DIR,
         outputSuffix: common.format === "xml" ? "aibom.xml" : "aibom.json"
       };
     }

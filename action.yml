@@ -91,7 +91,7 @@ inputs:
 
   output-file:
     required: false
-    description: "Output file path for commands that support writing a single file. Not supported for command=generate."
+    description: "Output file path for commands that support writing a single file. Not supported for command=scan or command=generate."
 
   spec-version:
     required: false
