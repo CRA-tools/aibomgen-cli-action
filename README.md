@@ -56,7 +56,6 @@ Interactive CLI flows are intentionally not first-class in CI-oriented action us
     generate-model-ids: |
       google-bert/bert-base-uncased
       gpt2
-    output-file: dist/generated_aibom.json
     format: json
 ```
 
@@ -112,6 +111,7 @@ permissions:
 - Workflow artifacts are uploaded as a single artifact bundle. If `artifact-name` is set, it changes only the bundle label shown in GitHub Actions, not the filenames inside the bundle.
 - Release uploads use the current run's produced files directly when the workflow is running on a release event or a tag push that resolves to a release.
 - If `generate` produces multiple AIBOM files, all discovered files are uploaded to the workflow artifact and attached to the release.
+- `generate` does not support `output-file`; it writes per-model AIBOM files so they can be validated, merged, and uploaded individually.
 - `aibom-artifact-match` remains available as a fallback for release attachment when current-run output files are not available.
 
 ### Input highlights

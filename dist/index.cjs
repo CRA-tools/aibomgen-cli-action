@@ -95230,6 +95230,9 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
       if (modelIds.length === 0) {
         throw new Error("Input 'generate-model-ids' is required when command=generate.");
       }
+      if (common.outputFile) {
+        throw new Error("Input 'output-file' is not supported when command=generate. Generate writes per-model AIBOM files.");
+      }
       const generateArgs = ["generate"];
       for (const modelId of modelIds) {
         generateArgs.push("--model-id", modelId);
@@ -95240,8 +95243,8 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
         args,
         argsList: [args],
         sensitiveValues,
-        expectedOutputFiles: common.outputFile ? [common.outputFile] : [],
-        outputDirectory: common.outputFile ? import_path4.default.dirname(common.outputFile) : DEFAULT_OUTPUT_DIR,
+        expectedOutputFiles: [],
+        outputDirectory: DEFAULT_OUTPUT_DIR,
         outputSuffix: common.format === "xml" ? "aibom.xml" : "aibom.json"
       };
     }

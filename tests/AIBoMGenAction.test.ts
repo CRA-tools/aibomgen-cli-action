@@ -61,6 +61,16 @@ describe("AIBoMGen Action command argument builder", () => {
     assert.ok(result.args.includes("--no-security-scan"));
   });
 
+  it("rejects output-file for generate", () => {
+    inputMap["generate-model-ids"] = "gpt2,google-bert/bert-base-uncased";
+    inputMap["output-file"] = "dist/generated_aibom.json";
+
+    assert.throws(
+      () => __test.buildCommandArgs("generate", getInput, () => {}),
+      /output-file.*not supported.*command=generate/i,
+    );
+  });
+
   it("rejects validate min score outside range", () => {
     inputMap["validate-input"] = "dist/aibom.json";
     inputMap["validate-min-score"] = "1.5";
