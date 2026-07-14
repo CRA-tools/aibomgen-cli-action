@@ -670,6 +670,7 @@ export const __test = {
   globToRegExp,
   listFilesRecursive,
   redactText,
+  shouldUseArtifactReleaseFallback,
 };
 
 async function runCliCommand(command: AIBoMGenCommand): Promise<string[]> {
@@ -757,6 +758,14 @@ function getCurrentRunReleaseAssetFiles(currentRun?: AIBoMGenActionOutputs): str
     .map((filePath) => path.resolve(filePath));
 }
 
+function shouldUseArtifactReleaseFallback(currentRun?: AIBoMGenActionOutputs): boolean {
+  if (!currentRun) {
+    return true;
+  }
+
+  return currentRun.writtenFiles.length > 0;
+}
+
 async function uploadReleaseFiles({
   filePaths,
   release,
@@ -812,6 +821,10 @@ export async function attachReleaseAssets(currentRun?: AIBoMGenActionOutputs): P
   if (currentRunFiles.length > 0) {
     core.info(dashWrap(`Attaching current run AIBOMs to release '${release.tag_name}'`));
     await uploadReleaseFiles({ filePaths: currentRunFiles, release });
+    return;
+  }
+
+  if (!shouldUseArtifactReleaseFallback(currentRun)) {
     return;
   }
 

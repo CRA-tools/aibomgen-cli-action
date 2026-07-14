@@ -99557,6 +99557,12 @@ function getCurrentRunReleaseAssetFiles(currentRun) {
   }
   return currentRun.writtenFiles.filter((filePath) => fs11.existsSync(filePath)).map((filePath) => import_path4.default.resolve(filePath));
 }
+function shouldUseArtifactReleaseFallback(currentRun) {
+  if (!currentRun) {
+    return true;
+  }
+  return currentRun.writtenFiles.length > 0;
+}
 async function uploadReleaseFiles({
   filePaths,
   release
@@ -99601,6 +99607,9 @@ async function attachReleaseAssets(currentRun) {
   if (currentRunFiles.length > 0) {
     info(dashWrap(`Attaching current run AIBOMs to release '${release.tag_name}'`));
     await uploadReleaseFiles({ filePaths: currentRunFiles, release });
+    return;
+  }
+  if (!shouldUseArtifactReleaseFallback(currentRun)) {
     return;
   }
   const command2 = parseEnumInput(

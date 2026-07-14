@@ -302,6 +302,23 @@ describe("AIBoMGen Action safety helpers", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  it("skips artifact fallback when current run produced no output files", () => {
+    assert.equal(
+      __test.shouldUseArtifactReleaseFallback({ command: "validate", writtenFiles: [] }),
+      false,
+    );
+  });
+
+  it("allows artifact fallback when current run has output files", () => {
+    assert.equal(
+      __test.shouldUseArtifactReleaseFallback({
+        command: "scan",
+        writtenFiles: ["dist/aibom.json"],
+      }),
+      true,
+    );
+  });
+
   it("recursively lists files from downloaded artifact contents", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "aibomgen-artifact-files-"));
     const nestedDir = path.join(tmpDir, "nested");
