@@ -558,52 +558,50 @@ function buildCommandArgs(
     }
 
     case "vuln-scan": {
-      const inputFile = getInput("vuln-scan-input").trim();
-      if (!inputFile) {
+      const inputFiles = parseListInput("vuln-scan-input", getInput);
+      if (inputFiles.length === 0) {
         throw new Error("Input 'vuln-scan-input' is required when command=vuln-scan.");
       }
 
       const enrich = parseBooleanInput("vuln-scan-enrich", false, getInput);
       const noPreview = parseBooleanInput("vuln-scan-no-preview", false, getInput);
       const outputFormat = parseEnumInput("vuln-scan-output-format", FORMATS, "auto", getInput);
+      if (common.outputFile) {
+        throw new Error(
+          "Input 'output-file' is not supported when command=vuln-scan. Enriched AIBOMs are written in place.",
+        );
+      }
 
-      const vulnArgs = ["vuln-scan", "--input", inputFile, "--format", common.format];
-      if (enrich) {
-        vulnArgs.push("--enrich", "--output-format", outputFormat);
-        if (common.outputFile) {
-          vulnArgs.push("--output", common.outputFile);
+      const vulnArgsList = inputFiles.map((inputFile) => {
+        const vulnArgs = [...args, "vuln-scan", "--input", inputFile, "--format", common.format];
+        if (enrich) {
+          vulnArgs.push("--enrich", "--output-format", outputFormat);
+          if (noPreview) {
+            vulnArgs.push("--no-preview");
+          }
         }
-        if (noPreview) {
-          vulnArgs.push("--no-preview");
+        if (common.specVersion) {
+          vulnArgs.push("--spec", common.specVersion);
         }
-      }
-      if (common.specVersion) {
-        vulnArgs.push("--spec", common.specVersion);
-      }
-      if (common.hfToken) {
-        vulnArgs.push("--hf-token", common.hfToken);
-      }
-      if (common.hfTimeout > 0) {
-        vulnArgs.push("--hf-timeout", String(common.hfTimeout));
-      }
-      vulnArgs.push("--log-level", common.logLevel);
-      args.push(...vulnArgs);
+        if (common.hfToken) {
+          vulnArgs.push("--hf-token", common.hfToken);
+        }
+        if (common.hfTimeout > 0) {
+          vulnArgs.push("--hf-timeout", String(common.hfTimeout));
+        }
+        vulnArgs.push("--log-level", common.logLevel);
+        return vulnArgs;
+      });
+
+      const outputFiles = enrich ? inputFiles : [];
 
       return {
-        args,
-        argsList: [args],
+        args: vulnArgsList[0],
+        argsList: vulnArgsList,
         sensitiveValues,
-        expectedOutputFiles: enrich ? [common.outputFile || inputFile] : [],
-        outputDirectory: enrich
-          ? common.outputFile
-            ? path.dirname(common.outputFile)
-            : path.dirname(inputFile)
-          : DEFAULT_OUTPUT_DIR,
-        outputSuffix: enrich
-          ? common.outputFile
-            ? path.basename(common.outputFile)
-            : path.basename(inputFile)
-          : "",
+        expectedOutputFiles: outputFiles,
+        outputDirectory: enrich ? path.dirname(outputFiles[0]) : DEFAULT_OUTPUT_DIR,
+        outputSuffix: enrich ? path.basename(outputFiles[0]) : "",
       };
     }
 

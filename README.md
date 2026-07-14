@@ -168,9 +168,10 @@ Use the additional examples below for commands that are typically run on existin
     vuln-scan-enrich: "true"
     vuln-scan-no-preview: "true"
     vuln-scan-output-format: json
-    output-file: dist/model_aibom.enriched.json
     log-level: standard
 ```
+
+`vuln-scan-input` also accepts multiple files. When used with `vuln-scan-enrich: "true"`, each AIBOM is enriched in place.
 
 #### Check completeness for an existing AIBOM
 

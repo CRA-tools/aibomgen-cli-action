@@ -50,7 +50,7 @@ inputs:
 
   vuln-scan-input:
     required: false
-    description: "Path to an existing AIBOM file for command=vuln-scan"
+    description: "Path or comma/newline-separated paths to existing AIBOM files for command=vuln-scan"
 
   vuln-scan-enrich:
     required: false
@@ -91,7 +91,7 @@ inputs:
 
   output-file:
     required: false
-    description: "Output file path for commands that support writing a single file. Not supported for command=scan or command=generate."
+    description: "Output file path for commands that support writing a single file. Not supported for command=scan, command=generate, or command=vuln-scan."
 
   spec-version:
     required: false

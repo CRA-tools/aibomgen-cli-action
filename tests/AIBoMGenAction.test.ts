@@ -170,7 +170,6 @@ describe("AIBoMGen Action command argument builder", () => {
     inputMap["vuln-scan-enrich"] = "true";
     inputMap["vuln-scan-no-preview"] = "true";
     inputMap["vuln-scan-output-format"] = "xml";
-    inputMap["output-file"] = "dist/aibom-enriched.xml";
 
     const result = __test.buildCommandArgs("vuln-scan", getInput, () => {});
 
@@ -179,7 +178,55 @@ describe("AIBoMGen Action command argument builder", () => {
     assert.ok(result.args.includes("--output-format"));
     assert.ok(result.args.includes("xml"));
     assert.ok(result.args.includes("--no-preview"));
-    assert.deepEqual(result.expectedOutputFiles, ["dist/aibom-enriched.xml"]);
+    assert.equal(result.args.includes("--output"), false);
+    assert.deepEqual(result.expectedOutputFiles, ["dist/aibom.json"]);
+  });
+
+  it("builds vuln-scan args for multiple input files", () => {
+    inputMap["vuln-scan-input"] = "dist/a1.json\ndist/a2.json";
+    inputMap["vuln-scan-enrich"] = "true";
+    inputMap["vuln-scan-no-preview"] = "true";
+
+    const result = __test.buildCommandArgs("vuln-scan", getInput, () => {});
+
+    assert.equal(result.argsList.length, 2);
+    assert.deepEqual(result.argsList[0], [
+      "vuln-scan",
+      "--input",
+      "dist/a1.json",
+      "--format",
+      "json",
+      "--enrich",
+      "--output-format",
+      "auto",
+      "--no-preview",
+      "--log-level",
+      "standard",
+    ]);
+    assert.deepEqual(result.argsList[1], [
+      "vuln-scan",
+      "--input",
+      "dist/a2.json",
+      "--format",
+      "json",
+      "--enrich",
+      "--output-format",
+      "auto",
+      "--no-preview",
+      "--log-level",
+      "standard",
+    ]);
+    assert.deepEqual(result.expectedOutputFiles, ["dist/a1.json", "dist/a2.json"]);
+  });
+
+  it("rejects output-file for vuln-scan", () => {
+    inputMap["vuln-scan-input"] = "dist/a1.json\ndist/a2.json";
+    inputMap["output-file"] = "dist/enriched.json";
+
+    assert.throws(
+      () => __test.buildCommandArgs("vuln-scan", getInput, () => {}),
+      /output-file.*not supported.*command=vuln-scan/i,
+    );
   });
 
   it("builds merge args with multiple AIBOM inputs", () => {
