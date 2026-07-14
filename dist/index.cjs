@@ -95212,6 +95212,7 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
       args.push(...scanArgs);
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: common.outputFile ? [common.outputFile] : [],
         outputDirectory: common.outputFile ? import_path4.default.dirname(common.outputFile) : DEFAULT_OUTPUT_DIR,
@@ -95231,6 +95232,7 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
       args.push(...generateArgs);
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: common.outputFile ? [common.outputFile] : [],
         outputDirectory: common.outputFile ? import_path4.default.dirname(common.outputFile) : DEFAULT_OUTPUT_DIR,
@@ -95238,8 +95240,8 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
       };
     }
     case "validate": {
-      const inputFile = getInput2("validate-input").trim();
-      if (!inputFile) {
+      const inputFiles = parseListInput("validate-input", getInput2);
+      if (inputFiles.length === 0) {
         throw new Error("Input 'validate-input' is required when command=validate.");
       }
       const strict = parseBooleanInput("validate-strict", false, getInput2);
@@ -95248,20 +95250,30 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
       if (minScore !== void 0 && (minScore < 0 || minScore > 1)) {
         throw new Error("Input 'validate-min-score' must be between 0 and 1.");
       }
-      const validateArgs = ["validate", "--input", inputFile, "--format", common.format];
-      if (strict) {
-        validateArgs.push("--strict");
-      }
-      if (checkModelCard) {
-        validateArgs.push("--check-model-card");
-      }
-      if (minScore !== void 0) {
-        validateArgs.push("--min-score", String(minScore));
-      }
-      validateArgs.push("--log-level", common.logLevel);
-      args.push(...validateArgs);
+      const validateArgsList = inputFiles.map((inputFile) => {
+        const validateArgs = [
+          ...args,
+          "validate",
+          "--input",
+          inputFile,
+          "--format",
+          common.format
+        ];
+        if (strict) {
+          validateArgs.push("--strict");
+        }
+        if (checkModelCard) {
+          validateArgs.push("--check-model-card");
+        }
+        if (minScore !== void 0) {
+          validateArgs.push("--min-score", String(minScore));
+        }
+        validateArgs.push("--log-level", common.logLevel);
+        return validateArgs;
+      });
       return {
-        args,
+        args: validateArgsList[0],
+        argsList: validateArgsList,
         sensitiveValues,
         expectedOutputFiles: [],
         outputDirectory: DEFAULT_OUTPUT_DIR,
@@ -95282,6 +95294,7 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
       args.push(...completenessArgs);
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: [],
         outputDirectory: DEFAULT_OUTPUT_DIR,
@@ -95319,6 +95332,7 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
       args.push(...vulnArgs);
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: enrich ? [common.outputFile || inputFile] : [],
         outputDirectory: enrich ? common.outputFile ? import_path4.default.dirname(common.outputFile) : import_path4.default.dirname(inputFile) : DEFAULT_OUTPUT_DIR,
@@ -95351,6 +95365,7 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
       args.push(...mergeArgs);
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: [mergeOutputFile],
         outputDirectory: import_path4.default.dirname(mergeOutputFile),
@@ -95360,6 +95375,7 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
     case "download":
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: [],
         outputDirectory: DEFAULT_OUTPUT_DIR,
@@ -95372,33 +95388,35 @@ function buildCommandArgs(command2, getInput2 = (name) => getInput(name), setSec
 async function runCliCommand(command2) {
   const cmd = await getAIBoMGenCommand();
   const build = buildCommandArgs(command2);
-  const redactedCommand = redactText(`${cmd} ${build.args.join(" ")}`.trim(), build.sensitiveValues);
-  info(`[command] ${redactedCommand}`);
-  const stderrChunks = [];
-  const exitCode = await group(
-    `Executing aibomgen-cli ${command2}...`,
-    async () => execute(cmd, build.args, {
-      listeners: {
-        stdout(buffer2) {
-          info(redactText(buffer2.toString(), build.sensitiveValues));
-        },
-        stderr(buffer2) {
-          const text = redactText(buffer2.toString(), build.sensitiveValues);
-          stderrChunks.push(text);
-          info(text);
-        },
-        debug(message) {
-          debug(redactText(message, build.sensitiveValues));
+  for (const args of build.argsList) {
+    const redactedCommand = redactText(`${cmd} ${args.join(" ")}`.trim(), build.sensitiveValues);
+    info(`[command] ${redactedCommand}`);
+    const stderrChunks = [];
+    const exitCode = await group(
+      `Executing aibomgen-cli ${command2}...`,
+      async () => execute(cmd, args, {
+        listeners: {
+          stdout(buffer2) {
+            info(redactText(buffer2.toString(), build.sensitiveValues));
+          },
+          stderr(buffer2) {
+            const text = redactText(buffer2.toString(), build.sensitiveValues);
+            stderrChunks.push(text);
+            info(text);
+          },
+          debug(message) {
+            debug(redactText(message, build.sensitiveValues));
+          }
         }
-      }
-    })
-  );
-  if (exitCode > 0) {
-    const stderrTail = stderrChunks.join("\n").slice(-4e3);
-    throw new Error(
-      `aibomgen-cli ${command2} failed with exit code ${exitCode}.${stderrTail ? `
-${stderrTail}` : ""}`
+      })
     );
+    if (exitCode > 0) {
+      const stderrTail = stderrChunks.join("\n").slice(-4e3);
+      throw new Error(
+        `aibomgen-cli ${command2} failed with exit code ${exitCode}.${stderrTail ? `
+${stderrTail}` : ""}`
+      );
+    }
   }
   if (build.expectedOutputFiles.length > 0) {
     return build.expectedOutputFiles.filter((f) => fs11.existsSync(f));

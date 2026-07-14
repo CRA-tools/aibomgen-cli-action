@@ -66,7 +66,9 @@ Interactive CLI flows are intentionally not first-class in CI-oriented action us
 - uses: idlab-discover/aibomgen-cli-action@main
   with:
     command: validate
-    validate-input: dist/generated_aibom.json
+    validate-input: |
+      dist/generated_aibom-1.json
+      dist/generated_aibom-2.json
     validate-strict: "true"
     validate-min-score: "0.6"
     validate-check-model-card: "true"
@@ -116,7 +118,7 @@ permissions:
 
 - Common: `command`, `aibomgen-version`, `aibomgen-sha256`, `format`, `output-file`, `config`, `log-level`
 - Hugging Face: `hf-token`, `hf-mode`, `hf-timeout`, `no-security-scan`
-- Validate: `validate-input`, `validate-strict`, `validate-min-score`, `validate-check-model-card`
+- Validate: `validate-input` (single file or comma/newline-separated files), `validate-strict`, `validate-min-score`, `validate-check-model-card`
 - Completeness: `completeness-input`, `completeness-plain-summary`
 - Vuln scan: `vuln-scan-input`, `vuln-scan-enrich`, `vuln-scan-no-preview`, `vuln-scan-output-format`
 - Merge: `merge-aibom-files`, `merge-sbom-file`, `merge-output-file`, `merge-deduplicate`

@@ -91,6 +91,36 @@ describe("AIBoMGen Action command argument builder", () => {
     assert.ok(result.args.includes("--check-model-card"));
     assert.ok(result.args.includes("--min-score"));
     assert.ok(result.args.includes("0.7"));
+    assert.deepEqual(result.argsList, [result.args]);
+  });
+
+  it("builds validate args for multiple input files", () => {
+    inputMap["validate-input"] = "dist/a1.json\ndist/a2.json";
+    inputMap["validate-strict"] = "true";
+
+    const result = __test.buildCommandArgs("validate", getInput, () => {});
+
+    assert.equal(result.argsList.length, 2);
+    assert.deepEqual(result.argsList[0], [
+      "validate",
+      "--input",
+      "dist/a1.json",
+      "--format",
+      "json",
+      "--strict",
+      "--log-level",
+      "standard",
+    ]);
+    assert.deepEqual(result.argsList[1], [
+      "validate",
+      "--input",
+      "dist/a2.json",
+      "--format",
+      "json",
+      "--strict",
+      "--log-level",
+      "standard",
+    ]);
   });
 
   it("requires completeness input", () => {
@@ -180,10 +210,7 @@ describe("AIBoMGen Action safety helpers", () => {
   });
 
   it("finds a shared artifact root for files across directories", () => {
-    const rootDir = __test.getArtifactRootDir([
-      "dist/aibom/model-a.json",
-      "dist/sbom/merged.xml",
-    ]);
+    const rootDir = __test.getArtifactRootDir(["dist/aibom/model-a.json", "dist/sbom/merged.xml"]);
 
     assert.equal(rootDir, path.resolve("dist"));
   });

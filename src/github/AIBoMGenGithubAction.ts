@@ -44,6 +44,7 @@ type SecretSetter = (value: string) => void;
 
 type BuildCommandResult = {
   args: string[];
+  argsList: string[][];
   sensitiveValues: string[];
   expectedOutputFiles: string[];
   outputDirectory: string;
@@ -441,6 +442,7 @@ function buildCommandArgs(
 
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: common.outputFile ? [common.outputFile] : [],
         outputDirectory: common.outputFile ? path.dirname(common.outputFile) : DEFAULT_OUTPUT_DIR,
@@ -463,6 +465,7 @@ function buildCommandArgs(
 
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: common.outputFile ? [common.outputFile] : [],
         outputDirectory: common.outputFile ? path.dirname(common.outputFile) : DEFAULT_OUTPUT_DIR,
@@ -471,8 +474,8 @@ function buildCommandArgs(
     }
 
     case "validate": {
-      const inputFile = getInput("validate-input").trim();
-      if (!inputFile) {
+      const inputFiles = parseListInput("validate-input", getInput);
+      if (inputFiles.length === 0) {
         throw new Error("Input 'validate-input' is required when command=validate.");
       }
 
@@ -483,21 +486,31 @@ function buildCommandArgs(
         throw new Error("Input 'validate-min-score' must be between 0 and 1.");
       }
 
-      const validateArgs = ["validate", "--input", inputFile, "--format", common.format];
-      if (strict) {
-        validateArgs.push("--strict");
-      }
-      if (checkModelCard) {
-        validateArgs.push("--check-model-card");
-      }
-      if (minScore !== undefined) {
-        validateArgs.push("--min-score", String(minScore));
-      }
-      validateArgs.push("--log-level", common.logLevel);
-      args.push(...validateArgs);
+      const validateArgsList = inputFiles.map((inputFile) => {
+        const validateArgs = [
+          ...args,
+          "validate",
+          "--input",
+          inputFile,
+          "--format",
+          common.format,
+        ];
+        if (strict) {
+          validateArgs.push("--strict");
+        }
+        if (checkModelCard) {
+          validateArgs.push("--check-model-card");
+        }
+        if (minScore !== undefined) {
+          validateArgs.push("--min-score", String(minScore));
+        }
+        validateArgs.push("--log-level", common.logLevel);
+        return validateArgs;
+      });
 
       return {
-        args,
+        args: validateArgsList[0],
+        argsList: validateArgsList,
         sensitiveValues,
         expectedOutputFiles: [],
         outputDirectory: DEFAULT_OUTPUT_DIR,
@@ -521,6 +534,7 @@ function buildCommandArgs(
 
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: [],
         outputDirectory: DEFAULT_OUTPUT_DIR,
@@ -562,6 +576,7 @@ function buildCommandArgs(
 
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: enrich ? [common.outputFile || inputFile] : [],
         outputDirectory: enrich
@@ -606,6 +621,7 @@ function buildCommandArgs(
 
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: [mergeOutputFile],
         outputDirectory: path.dirname(mergeOutputFile),
@@ -616,6 +632,7 @@ function buildCommandArgs(
     case "download":
       return {
         args,
+        argsList: [args],
         sensitiveValues,
         expectedOutputFiles: [],
         outputDirectory: DEFAULT_OUTPUT_DIR,
@@ -641,34 +658,36 @@ async function runCliCommand(command: AIBoMGenCommand): Promise<string[]> {
   const cmd = await getAIBoMGenCommand();
   const build = buildCommandArgs(command);
 
-  const redactedCommand = redactText(`${cmd} ${build.args.join(" ")}`.trim(), build.sensitiveValues);
-  core.info(`[command] ${redactedCommand}`);
+  for (const args of build.argsList) {
+    const redactedCommand = redactText(`${cmd} ${args.join(" ")}`.trim(), build.sensitiveValues);
+    core.info(`[command] ${redactedCommand}`);
 
-  const stderrChunks: string[] = [];
+    const stderrChunks: string[] = [];
 
-  const exitCode = await core.group(`Executing aibomgen-cli ${command}...`, async () =>
-    execute(cmd, build.args, {
-      listeners: {
-        stdout(buffer) {
-          core.info(redactText(buffer.toString(), build.sensitiveValues));
+    const exitCode = await core.group(`Executing aibomgen-cli ${command}...`, async () =>
+      execute(cmd, args, {
+        listeners: {
+          stdout(buffer) {
+            core.info(redactText(buffer.toString(), build.sensitiveValues));
+          },
+          stderr(buffer) {
+            const text = redactText(buffer.toString(), build.sensitiveValues);
+            stderrChunks.push(text);
+            core.info(text);
+          },
+          debug(message) {
+            core.debug(redactText(message, build.sensitiveValues));
+          },
         },
-        stderr(buffer) {
-          const text = redactText(buffer.toString(), build.sensitiveValues);
-          stderrChunks.push(text);
-          core.info(text);
-        },
-        debug(message) {
-          core.debug(redactText(message, build.sensitiveValues));
-        },
-      },
-    }),
-  );
-
-  if (exitCode > 0) {
-    const stderrTail = stderrChunks.join("\n").slice(-4000);
-    throw new Error(
-      `aibomgen-cli ${command} failed with exit code ${exitCode}.${stderrTail ? `\n${stderrTail}` : ""}`,
+      }),
     );
+
+    if (exitCode > 0) {
+      const stderrTail = stderrChunks.join("\n").slice(-4000);
+      throw new Error(
+        `aibomgen-cli ${command} failed with exit code ${exitCode}.${stderrTail ? `\n${stderrTail}` : ""}`,
+      );
+    }
   }
 
   if (build.expectedOutputFiles.length > 0) {

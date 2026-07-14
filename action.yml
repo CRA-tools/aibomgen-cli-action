@@ -23,7 +23,7 @@ inputs:
 
   validate-input:
     required: false
-    description: "Path to an existing AIBOM file for command=validate"
+    description: "Path or comma/newline-separated paths to existing AIBOM files for command=validate"
 
   validate-strict:
     required: false
