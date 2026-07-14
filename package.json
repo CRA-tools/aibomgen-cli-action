@@ -11,7 +11,7 @@
     "format-check": "prettier --check **/*.ts",
     "lint": "eslint src/**/*.ts",
     "package": "npm run package:build",
-    "package:build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.cjs",
+    "package:build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.cjs",
     "test": "node --import tsx --test --experimental-test-module-mocks tests/*.test.ts",
     "all": "npm run build && npm run format && npm run lint && npm run package && npm test",
     "prepare": "husky",
@@ -61,6 +61,6 @@
     "typescript-eslint": "^8.0.0"
   },
   "engines": {
-    "node": ">=v20.11.0"
+    "node": ">=v24.0.0"
   }
 }
