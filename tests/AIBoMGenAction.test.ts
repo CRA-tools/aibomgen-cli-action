@@ -1,338 +1,183 @@
 import assert from "node:assert";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, it } from "node:test";
 import { __test } from "../src/github/AIBoMGenGithubAction";
 
-type InputMap = Record<string, string>;
-
-let inputMap: InputMap;
-let getInput: (name: string) => string;
+let inputMap: Record<string, string>;
+const getInput = (name: string) => inputMap[name] ?? "";
+const build = (command: Parameters<typeof __test.buildCommandArgs>[0]) =>
+  __test.buildCommandArgs(command, getInput, () => {});
 
 describe("AIBoMGen Action command argument builder", () => {
   beforeEach(() => {
-    inputMap = {
-      format: "json",
-      "hf-mode": "online",
-      "hf-timeout": "0",
-      "log-level": "standard",
-      "no-security-scan": "false",
-      "spec-version": "",
-      "output-file": "",
-      "hf-token": "",
-      config: "",
-    };
+    inputMap = {};
+  });
 
-    getInput = (name: string) => inputMap[name] ?? "";
+  it("builds scan args with defaults", () => {
+    inputMap["scan-input"] = "./repo";
+
+    const result = build("scan");
+
+    assert.deepEqual(result.argsList, [
+      ["--no-input", "scan", "--input", "./repo", "--format", "json", "--hf-mode", "online"],
+    ]);
+    assert.equal(result.outputSuffix, ".aibom.cdx.json");
+    assert.deepEqual(result.env, {});
+  });
+
+  it("rejects the removed auto format", () => {
+    inputMap.format = "auto";
+    assert.throws(() => build("scan"), /format.*json, xml/i);
+  });
+
+  it("passes the HF token as env, never as an argument, and masks it", () => {
+    inputMap["hf-token"] = "hf_secret";
+    const secrets: string[] = [];
+
+    const result = __test.buildCommandArgs("scan", getInput, (s) => secrets.push(s));
+
+    assert.deepEqual(result.env, { HF_TOKEN: "hf_secret" });
+    assert.equal(result.argsList.flat().includes("hf_secret"), false);
+    assert.deepEqual(secrets, ["hf_secret"]);
+  });
+
+  it("maps log-level to the v0.3.0 verbosity flags", () => {
+    inputMap["log-level"] = "quiet";
+    assert.deepEqual(build("scan").argsList[0].slice(0, 2), ["--no-input", "--quiet"]);
+    inputMap["log-level"] = "debug";
+    assert.deepEqual(build("scan").argsList[0].slice(0, 2), ["--no-input", "-vv"]);
   });
 
   it("requires model IDs for generate", () => {
-    assert.throws(
-      () => __test.buildCommandArgs("generate", getInput, () => {}),
-      /generate-model-ids.*required.*command=generate/i,
-    );
+    assert.throws(() => build("generate"), /generate-model-ids.*required.*command=generate/i);
   });
 
-  it("builds scan args with input", () => {
-    inputMap["scan-input"] = "./repo";
-
-    const result = __test.buildCommandArgs("scan", getInput, () => {});
-
-    assert.ok(result.args.includes("scan"));
-    assert.ok(result.args.includes("--input"));
-    assert.ok(result.args.includes("./repo"));
-    assert.equal(result.args.includes("--output"), false);
-    assert.deepEqual(result.expectedOutputFiles, []);
-  });
-
-  it("rejects output-file for scan", () => {
-    inputMap["scan-input"] = "./repo";
-    inputMap["output-file"] = "dist/out.json";
-
-    assert.throws(
-      () => __test.buildCommandArgs("scan", getInput, () => {}),
-      /output-file.*not supported.*command=scan/i,
-    );
-  });
-
-  it("builds generate args with multiple model IDs", () => {
+  it("builds generate args with multiple model IDs and options", () => {
     inputMap["generate-model-ids"] = "gpt2,google-bert/bert-base-uncased";
     inputMap["no-security-scan"] = "true";
+    inputMap["spec-version"] = "1.6";
+    inputMap["hf-timeout"] = "30";
+    inputMap.format = "xml";
 
-    const result = __test.buildCommandArgs("generate", getInput, () => {});
+    const result = build("generate");
 
-    assert.ok(result.args.includes("generate"));
-    assert.ok(result.args.includes("--model-id"));
-    assert.ok(result.args.includes("gpt2"));
-    assert.ok(result.args.includes("google-bert/bert-base-uncased"));
-    assert.ok(result.args.includes("--no-security-scan"));
+    assert.deepEqual(result.argsList[0], [
+      "--no-input",
+      "generate",
+      "--model-id",
+      "gpt2",
+      "--model-id",
+      "google-bert/bert-base-uncased",
+      "--format",
+      "xml",
+      "--spec",
+      "1.6",
+      "--hf-mode",
+      "online",
+      "--hf-timeout",
+      "30",
+      "--no-security-scan",
+    ]);
+    assert.equal(result.outputSuffix, ".aibom.cdx.xml");
   });
 
-  it("rejects output-file for generate", () => {
-    inputMap["generate-model-ids"] = "gpt2,google-bert/bert-base-uncased";
-    inputMap["output-file"] = "dist/generated_aibom.json";
-
-    assert.throws(
-      () => __test.buildCommandArgs("generate", getInput, () => {}),
-      /output-file.*not supported.*command=generate/i,
-    );
-  });
-
-  it("rejects validate min score outside range", () => {
-    inputMap["validate-input"] = "dist/aibom.json";
+  it("requires validate input and a min score between 0 and 1", () => {
+    assert.throws(() => build("validate"), /validate-input.*required.*command=validate/i);
+    inputMap["validate-input"] = "dist/a.json";
     inputMap["validate-min-score"] = "1.5";
-
-    assert.throws(
-      () => __test.buildCommandArgs("validate", getInput, () => {}),
-      /validate-min-score.*between 0 and 1/i,
-    );
+    assert.throws(() => build("validate"), /validate-min-score.*between 0 and 1/i);
   });
 
-  it("requires validate input", () => {
-    assert.throws(
-      () => __test.buildCommandArgs("validate", getInput, () => {}),
-      /validate-input.*required.*command=validate/i,
-    );
-  });
-
-  it("builds validate args with strict and min-score", () => {
-    inputMap["validate-input"] = "dist/aibom.json";
-    inputMap["validate-strict"] = "true";
-    inputMap["validate-min-score"] = "0.7";
-    inputMap["validate-check-model-card"] = "true";
-
-    const result = __test.buildCommandArgs("validate", getInput, () => {});
-
-    assert.ok(result.args.includes("validate"));
-    assert.ok(result.args.includes("--strict"));
-    assert.ok(result.args.includes("--check-model-card"));
-    assert.ok(result.args.includes("--min-score"));
-    assert.ok(result.args.includes("0.7"));
-    assert.deepEqual(result.argsList, [result.args]);
-  });
-
-  it("builds validate args for multiple input files", () => {
+  it("builds one validate invocation per file with strict options", () => {
     inputMap["validate-input"] = "dist/a1.json\ndist/a2.json";
     inputMap["validate-strict"] = "true";
+    inputMap["validate-fail-severity"] = "high";
+    inputMap["validate-min-score"] = "0.5";
 
-    const result = __test.buildCommandArgs("validate", getInput, () => {});
-
-    assert.equal(result.argsList.length, 2);
-    assert.deepEqual(result.argsList[0], [
-      "validate",
-      "--input",
-      "dist/a1.json",
-      "--format",
-      "json",
-      "--strict",
-      "--log-level",
-      "standard",
-    ]);
-    assert.deepEqual(result.argsList[1], [
-      "validate",
-      "--input",
-      "dist/a2.json",
-      "--format",
-      "json",
-      "--strict",
-      "--log-level",
-      "standard",
+    const flags = ["--strict", "--fail-severity", "high", "--min-score", "0.5"];
+    assert.deepEqual(build("validate").argsList, [
+      ["--no-input", "validate", "--input", "dist/a1.json", ...flags],
+      ["--no-input", "validate", "--input", "dist/a2.json", ...flags],
     ]);
   });
 
-  it("requires completeness input", () => {
-    assert.throws(
-      () => __test.buildCommandArgs("completeness", getInput, () => {}),
-      /completeness-input.*required.*command=completeness/i,
-    );
+  it("builds completeness args", () => {
+    assert.throws(() => build("completeness"), /completeness-input.*required/i);
+    inputMap["completeness-input"] = "dist/a.json";
+    assert.deepEqual(build("completeness").argsList, [
+      ["--no-input", "completeness", "--input", "dist/a.json"],
+    ]);
   });
 
-  it("builds completeness args with plain summary", () => {
-    inputMap["completeness-input"] = "dist/aibom.json";
-    inputMap["completeness-plain-summary"] = "true";
+  it("builds vuln-scan report-only args without outputs", () => {
+    assert.throws(() => build("vuln-scan"), /vuln-scan-input.*required/i);
+    inputMap["vuln-scan-input"] = "dist/a.json";
 
-    const result = __test.buildCommandArgs("completeness", getInput, () => {});
+    const result = build("vuln-scan");
 
-    assert.ok(result.args.includes("completeness"));
-    assert.ok(result.args.includes("--plain-summary"));
+    assert.deepEqual(result.argsList, [["--no-input", "vuln-scan", "--input", "dist/a.json"]]);
+    assert.deepEqual(result.outputFiles, []);
   });
 
-  it("requires vuln-scan input", () => {
-    assert.throws(
-      () => __test.buildCommandArgs("vuln-scan", getInput, () => {}),
-      /vuln-scan-input.*required.*command=vuln-scan/i,
-    );
-  });
-
-  it("builds vuln-scan args with enrich options", () => {
-    inputMap["vuln-scan-input"] = "dist/aibom.json";
+  it("enriches each vuln-scan input in place without prompting", () => {
+    inputMap["vuln-scan-input"] = "dist/a1.json,dist/a2.json";
     inputMap["vuln-scan-enrich"] = "true";
-    inputMap["vuln-scan-no-preview"] = "true";
-    inputMap["vuln-scan-output-format"] = "xml";
 
-    const result = __test.buildCommandArgs("vuln-scan", getInput, () => {});
+    const result = build("vuln-scan");
 
-    assert.ok(result.args.includes("vuln-scan"));
-    assert.ok(result.args.includes("--enrich"));
-    assert.ok(result.args.includes("--output-format"));
-    assert.ok(result.args.includes("xml"));
-    assert.ok(result.args.includes("--no-preview"));
-    assert.equal(result.args.includes("--output"), false);
-    assert.deepEqual(result.expectedOutputFiles, ["dist/aibom.json"]);
-  });
-
-  it("builds vuln-scan args for multiple input files", () => {
-    inputMap["vuln-scan-input"] = "dist/a1.json\ndist/a2.json";
-    inputMap["vuln-scan-enrich"] = "true";
-    inputMap["vuln-scan-no-preview"] = "true";
-
-    const result = __test.buildCommandArgs("vuln-scan", getInput, () => {});
-
-    assert.equal(result.argsList.length, 2);
-    assert.deepEqual(result.argsList[0], [
-      "vuln-scan",
-      "--input",
-      "dist/a1.json",
-      "--format",
-      "json",
-      "--enrich",
-      "--output-format",
-      "auto",
-      "--no-preview",
-      "--log-level",
-      "standard",
+    assert.deepEqual(result.argsList, [
+      ["--no-input", "vuln-scan", "--input", "dist/a1.json", "--enrich", "--yes"],
+      ["--no-input", "vuln-scan", "--input", "dist/a2.json", "--enrich", "--yes"],
     ]);
-    assert.deepEqual(result.argsList[1], [
-      "vuln-scan",
-      "--input",
-      "dist/a2.json",
-      "--format",
-      "json",
-      "--enrich",
-      "--output-format",
-      "auto",
-      "--no-preview",
-      "--log-level",
-      "standard",
-    ]);
-    assert.deepEqual(result.expectedOutputFiles, ["dist/a1.json", "dist/a2.json"]);
-  });
-
-  it("rejects output-file for vuln-scan", () => {
-    inputMap["vuln-scan-input"] = "dist/a1.json\ndist/a2.json";
-    inputMap["output-file"] = "dist/enriched.json";
-
-    assert.throws(
-      () => __test.buildCommandArgs("vuln-scan", getInput, () => {}),
-      /output-file.*not supported.*command=vuln-scan/i,
-    );
+    assert.deepEqual(result.outputFiles, ["dist/a1.json", "dist/a2.json"]);
   });
 
   it("builds merge args with multiple AIBOM inputs", () => {
     inputMap["merge-aibom-files"] = "dist/a1.json,dist/a2.json";
-    inputMap["merge-sbom-file"] = "dist/sbom.json";
+    inputMap["merge-sbom-file"] = "sbom.json";
+    assert.throws(() => build("merge"), /merge-output-file.*required/i);
     inputMap["merge-output-file"] = "dist/merged.json";
     inputMap["merge-deduplicate"] = "false";
 
-    const result = __test.buildCommandArgs("merge", getInput, () => {});
+    const result = build("merge");
 
-    assert.deepEqual(result.expectedOutputFiles, ["dist/merged.json"]);
-    assert.ok(result.args.includes("merge"));
-    assert.ok(result.args.includes("--aibom"));
-    assert.ok(result.args.includes("dist/a1.json"));
-    assert.ok(result.args.includes("dist/a2.json"));
-    assert.ok(result.args.includes("--sbom"));
-    assert.ok(result.args.includes("dist/sbom.json"));
-    assert.ok(result.args.includes("--deduplicate=false"));
-  });
-
-  it("builds download command without requiring extra inputs", () => {
-    const result = __test.buildCommandArgs("download", getInput, () => {});
-
-    assert.deepEqual(result.expectedOutputFiles, []);
-    assert.equal(result.outputDirectory, "dist");
-    assert.equal(result.outputSuffix, "");
+    assert.deepEqual(result.argsList[0], [
+      "--no-input",
+      "merge",
+      "--aibom",
+      "dist/a1.json",
+      "--aibom",
+      "dist/a2.json",
+      "--sbom",
+      "sbom.json",
+      "--output",
+      "dist/merged.json",
+      "--no-deduplicate",
+    ]);
+    assert.deepEqual(result.outputFiles, ["dist/merged.json"]);
   });
 });
 
-describe("AIBoMGen Action safety helpers", () => {
-  it("uses requested default artifact names for scan generate and merge", () => {
-    assert.equal(__test.getArtifactName("scan"), "output-aiboms");
-    assert.equal(__test.getArtifactName("generate"), "output-aiboms");
-    assert.equal(__test.getArtifactName("vuln-scan"), "output-aiboms-vuln");
-    assert.equal(__test.getArtifactName("merge"), "merged");
-  });
-
-  it("supports exact and glob artifact matching", () => {
-    assert.equal(
-      __test.artifactMatches("repo-job-scan-aibom", "repo-job-scan-aibom", "exact"),
-      true,
-    );
-    assert.equal(__test.artifactMatches("repo-job-scan-aibom", "repo-*-scan-*", "glob"), true);
-    assert.equal(__test.artifactMatches("repo-job-scan-aibom", "other-*", "glob"), false);
-  });
-
-  it("redacts sensitive values in logs", () => {
-    const text = "cmd --hf-token my-secret-token --config /tmp/config.yml";
-    const redacted = __test.redactText(text, ["my-secret-token", "/tmp/config.yml"]);
-    assert.equal(redacted.includes("my-secret-token"), false);
-    assert.equal(redacted.includes("/tmp/config.yml"), false);
-    assert.equal(redacted.includes("***"), true);
+describe("AIBoMGen Action helpers", () => {
+  it("uses default artifact names per command", () => {
+    assert.equal(__test.getArtifactName("scan", getInput), "output-aiboms");
+    assert.equal(__test.getArtifactName("generate", getInput), "output-aiboms");
+    assert.equal(__test.getArtifactName("vuln-scan", getInput), "output-aiboms-vuln");
+    assert.equal(__test.getArtifactName("merge", getInput), "merged");
   });
 
   it("finds a shared artifact root for files across directories", () => {
-    const rootDir = __test.getArtifactRootDir(["dist/aibom/model-a.json", "dist/sbom/merged.xml"]);
-
-    assert.equal(rootDir, path.resolve("dist"));
-  });
-
-  it("filters missing current-run release files", () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "aibomgen-current-run-"));
-    const existingFile = path.join(tmpDir, "aibom.json");
-    fs.writeFileSync(existingFile, "{}");
-
-    const releaseFiles = __test.getCurrentRunReleaseAssetFiles({
-      command: "scan",
-      writtenFiles: [existingFile, path.join(tmpDir, "missing.json")],
-    });
-
-    assert.deepEqual(releaseFiles, [path.resolve(existingFile)]);
-
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("skips artifact fallback when current run produced no output files", () => {
     assert.equal(
-      __test.shouldUseArtifactReleaseFallback({ command: "validate", writtenFiles: [] }),
-      false,
+      __test.getArtifactRootDir(["dist/aibom/model-a.json", "dist/sbom/merged.xml"]),
+      path.resolve("dist"),
     );
+    assert.equal(__test.getArtifactRootDir(["dist/a.json"]), path.resolve("dist"));
   });
 
-  it("allows artifact fallback when current run has output files", () => {
-    assert.equal(
-      __test.shouldUseArtifactReleaseFallback({
-        command: "scan",
-        writtenFiles: ["dist/aibom.json"],
-      }),
-      true,
+  it("names release assets like the aibomgen-cli releases", () => {
+    assert.match(
+      __test.getReleaseAssetName("v0.3.0"),
+      /^aibomgen-cli_0\.3\.0_\w+_\w+\.(tar\.gz|zip)$/,
     );
-  });
-
-  it("recursively lists files from downloaded artifact contents", () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "aibomgen-artifact-files-"));
-    const nestedDir = path.join(tmpDir, "nested");
-    const topLevelFile = path.join(tmpDir, "aibom.json");
-    const nestedFile = path.join(nestedDir, "merged.xml");
-
-    fs.mkdirSync(nestedDir, { recursive: true });
-    fs.writeFileSync(topLevelFile, "{}");
-    fs.writeFileSync(nestedFile, "<bom />");
-
-    const files = __test.listFilesRecursive(tmpDir).sort();
-
-    assert.deepEqual(files, [nestedFile, topLevelFile].sort());
-
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });

@@ -1,0 +1,114 @@
+# Reference DevSecOps pipeline (Fig. 1 of the AIBoMGen CLI paper), run against the fake
+# product in examples/reference-product on every push, so it also tests this action:
+# SBOM generator of choice -> scan -> AIBOM per model -> validate -> merge -> sign -> artifacts.
+# Publishing a release tagged reference-product-v* (a release of the fake product, not of this
+# action) also attaches the signed BOMs to that release.
+# reference-security-gate.yml covers the failing branch, reference-refresh.yml the scheduled refresh.
+name: Reference pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PRODUCT_DIR: examples/reference-product
+
+jobs:
+  bom:
+    # Releases of the action itself (vX.Y.Z tags) are not product releases.
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'reference-product-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # keyless Sigstore signing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Generate SBOM (Syft)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: ${{ env.PRODUCT_DIR }}
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+
+      - name: Scan and generate one AIBOM per model
+        id: scan
+        uses: ./
+        with:
+          command: scan
+          scan-input: ${{ env.PRODUCT_DIR }}
+          hf-token: ${{ secrets.HF_TOKEN }} # optional, raises Hub rate limits
+          upload-artifact: "false"
+          upload-release-assets: "false"
+
+      - name: Validate AIBOMs
+        uses: ./
+        with:
+          command: validate
+          validate-input: ${{ steps.scan.outputs.written-files }}
+          validate-strict: "true"
+          validate-fail-severity: high
+
+      - name: Merge AIBOMs into the SBOM
+        uses: ./
+        with:
+          command: merge
+          merge-aibom-files: ${{ steps.scan.outputs.written-files }}
+          merge-sbom-file: sbom.cdx.json
+          merge-output-file: dist/merged.cdx.json
+          upload-artifact: "false"
+          upload-release-assets: "false"
+
+      - name: Sign AIBOMs and merged BOM (Sigstore)
+        # Fork pull requests get no OIDC token, so only signed outside pull requests.
+        if: github.event_name != 'pull_request'
+        uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
+        with:
+          inputs: dist/*.cdx.json
+          verify: "true"
+          verify-cert-identity: ${{ github.server_url }}/${{ github.workflow_ref }}
+          verify-oidc-issuer: https://token.actions.githubusercontent.com
+          release-signing-artifacts: "false"
+
+      - name: Upload AIBOMs, merged BOM and signatures
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reference-boms
+          path: |
+            dist/*.cdx.json
+            dist/*.sigstore.json
+          if-no-files-found: error
+
+  release-assets:
+    needs: bom
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # attach assets to the product release; only this job can write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: reference-boms
+          path: boms
+
+      - name: Attach AIBOMs, merged BOM and signatures to the product release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" boms/* --clobber

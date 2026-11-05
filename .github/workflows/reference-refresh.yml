@@ -1,0 +1,60 @@
+# Scheduled half of the reference pipeline (Fig. 1 of the AIBoMGen CLI paper): vulnerability
+# status changes after an AIBOM is generated, so refresh the Hub's security findings in the
+# latest AIBOMs. Also runs after every successful reference pipeline run on main, to test it.
+name: Reference refresh
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # weekly, Monday 06:17 UTC
+  workflow_run:
+    workflows: [Reference pipeline]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  refresh:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # download the artifact of another run
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the latest AIBOMs
+        id: boms
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          run_id="${RUN_ID:-$(gh run list --workflow reference-pipeline.yml --branch main --event push \
+            --status success --limit 1 --json databaseId --jq '.[0].databaseId')}"
+          : "${run_id:?no successful Reference pipeline run on main}"
+          gh run download "$run_id" --name reference-boms --dir boms
+          { echo "files<<EOF"; ls boms/*.aibom.cdx.json; echo "EOF"; } >> "$GITHUB_OUTPUT"
+
+      - name: Refresh security findings (vuln-scan --enrich)
+        uses: ./
+        with:
+          command: vuln-scan
+          vuln-scan-input: ${{ steps.boms.outputs.files }}
+          vuln-scan-enrich: "true"
+          hf-token: ${{ secrets.HF_TOKEN }} # optional, raises Hub rate limits
+          artifact-name: reference-boms-refreshed
+          upload-release-assets: "false"
+
+      - name: Validate refreshed AIBOMs
+        uses: ./
+        with:
+          command: validate
+          validate-input: ${{ steps.boms.outputs.files }}
+          validate-strict: "true"
+          validate-fail-severity: high

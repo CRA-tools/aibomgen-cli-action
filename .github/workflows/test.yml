@@ -10,42 +10,31 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: ["24"]
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: "npm"
+          persist-credentials: false
 
-      - name: Install dependencies
-        run: npm ci
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
 
-      - name: Type check
-        run: npm run build
-
-      - name: Format check
-        run: npm run format-check
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm test
-
-      - name: Package
-        run: npm run package
+      - run: npm ci
+      - run: npm run build
+      - run: npm run format-check
+      - run: npm run lint
+      - run: npm test
+      - run: npm run package
 
       - name: Ensure dist is up to date
-        if: matrix.node-version == '24'
         run: |
           git diff --exit-code dist/ || \
           (echo "ERROR: dist/ is out of date. Run 'npm run package' and commit the result." && exit 1)
@@ -54,17 +43,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Resolve CLI with local action
         id: download
         uses: ./
         with:
           command: download
-          upload-artifact: "false"
-          upload-release-assets: "false"
 
-      - name: Verify command output
-        run: |
-          test -n "${{ steps.download.outputs.cmd }}"
-          echo "Resolved cmd: ${{ steps.download.outputs.cmd }}"
+      - name: Verify the resolved CLI runs
+        env:
+          CMD: ${{ steps.download.outputs.cmd }}
+        run: '"$CMD" version'

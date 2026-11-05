@@ -30,23 +30,18 @@ inputs:
     description: "Enable strict validation mode for command=validate"
     default: "false"
 
+  validate-fail-severity:
+    required: false
+    description: "Lowest vulnerability severity that fails strict validation: critical, high, medium, low, info"
+    default: "medium"
+
   validate-min-score:
     required: false
     description: "Minimum completeness score (0..1) for command=validate"
 
-  validate-check-model-card:
-    required: false
-    description: "Validate model card fields for command=validate"
-    default: "false"
-
   completeness-input:
     required: false
     description: "Path to an existing AIBOM file for command=completeness"
-
-  completeness-plain-summary:
-    required: false
-    description: "Emit plain machine-readable summary for command=completeness"
-    default: "false"
 
   vuln-scan-input:
     required: false
@@ -56,16 +51,6 @@ inputs:
     required: false
     description: "Inject vulnerability findings back into the AIBOM for command=vuln-scan"
     default: "false"
-
-  vuln-scan-no-preview:
-    required: false
-    description: "Skip save preview prompt when command=vuln-scan and enrich is enabled"
-    default: "false"
-
-  vuln-scan-output-format:
-    required: false
-    description: "Output format for enriched AIBOM in command=vuln-scan"
-    default: "auto"
 
   merge-aibom-files:
     required: false
@@ -86,12 +71,8 @@ inputs:
 
   format:
     required: false
-    description: "BOM format input for command operations: json, xml, auto"
-    default: "auto"
-
-  output-file:
-    required: false
-    description: "Output file path for commands that support writing a single file. Not supported for command=scan, command=generate, or command=vuln-scan."
+    description: "Output format for command=scan and command=generate: json or xml"
+    default: "json"
 
   spec-version:
     required: false
@@ -108,7 +89,7 @@ inputs:
 
   hf-timeout:
     required: false
-    description: "Hugging Face timeout in seconds"
+    description: "Hugging Face timeout in seconds per request (0 uses the CLI default)"
     default: "0"
 
   no-security-scan:
@@ -127,8 +108,8 @@ inputs:
 
   aibomgen-version:
     required: false
-    description: "aibomgen-cli version to use (for example v0.2.1)"
-    default: "v0.2.1"
+    description: "aibomgen-cli release to use (for example v0.3.0)"
+    default: "v0.3.0"
 
   aibomgen-sha256:
     required: false
@@ -157,21 +138,8 @@ inputs:
 
   upload-release-assets:
     required: false
-    description: "Attach produced output files to a release on release/tag events using their original filenames"
+    description: "Attach produced output files to the release on release events and tag pushes, using their original filenames"
     default: "true"
-
-  aibom-artifact-match:
-    required: false
-    description: "Fallback pattern used to select workflow artifacts for release upload when current-run output files are not available"
-
-  aibom-artifact-match-mode:
-    required: false
-    description: "Pattern mode for the fallback aibom-artifact-match lookup: exact or glob"
-    default: "exact"
-
-  release-ref-prefix:
-    required: false
-    description: "Ref prefix used to detect release pushes (default: refs/tags/)"
 
 outputs:
   cmd:

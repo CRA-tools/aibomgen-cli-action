@@ -16,113 +16,69 @@ This repository is part of the broader AIBoMGen ecosystem for generating, analyz
 
 ## Usage
 
-The action is command-based:
+The action is command-based. Each `command` runs one [aibomgen-cli](https://github.com/idlab-discover/aibomgen-cli) command, non-interactively:
 
-- `scan`
-- `generate`
-- `validate`
-- `completeness`
-- `vuln-scan`
-- `merge`
-- `download`
+- `scan`: detect the Hugging Face models a directory uses and write one AIBOM per model
+- `generate`: write AIBOMs for explicit model IDs
+- `validate`: check AIBOMs against the CycloneDX schema, completeness, and vulnerability findings
+- `completeness`: print a completeness report for one AIBOM
+- `vuln-scan`: fetch the Hub's security scan results again, and optionally write them into the AIBOMs
+- `merge`: merge AIBOMs into an SBOM from any generator
+- `download`: only install the CLI and output its path as `cmd`
 
-Interactive CLI flows are intentionally not first-class in CI-oriented action usage.
+All inputs and their defaults are listed in [action.yml](./action.yml). The examples use the `@v1` tag; for the strongest supply-chain guarantee, pin a full commit SHA instead.
 
-### Recommended workflow
+### Reference pipeline
 
-For most repositories, the recommended pattern is:
+[.github/workflows/reference-pipeline.yml](.github/workflows/reference-pipeline.yml) is the DevSecOps pipeline from Fig. 1 of the AIBoMGen CLI paper. It runs on every push to this repository against the fake product in [examples/reference-product](examples/reference-product), so it also tests the action:
 
-1. `scan` the repository and let the action discover one AIBOM per model
-2. `validate` the discovered files using the `written-files` output
-3. generate an SBOM with Syft
-4. `merge` the discovered AIBOMs with the SBOM
+1. generate an SBOM with an SBOM generator of choice (Syft)
+2. `scan` the product and write one AIBOM per model
+3. `validate` the AIBOMs in strict mode (fails the build on invalid AIBOMs or findings rated `high` or above)
+4. `merge` the AIBOMs into the SBOM
+5. sign every AIBOM and the merged BOM with keyless Sigstore ([gh-action-sigstore-python](https://github.com/sigstore/gh-action-sigstore-python)), which also verifies the signatures
+6. upload everything as the `reference-boms` workflow artifact
+7. on a release of the product, attach the same files to that release
 
-This keeps multi-model output, validation, artifact upload, and release asset upload aligned.
+Releases of the fake product are tagged `reference-product-v*`, separate from the action's own `vX.Y.Z` releases, which the pipeline ignores. Create them as prereleases that are not marked latest, so the action release stays the repository's latest release:
 
-```yaml
-name: Generate AIBOM
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  release:
-    types: [created]
-  workflow_dispatch:
-
-jobs:
-  generate-aibom:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: read
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Scan repository and generate AIBOMs
-        id: scan
-        uses: CRA-tools/aibomgen-cli-action@main
-        with:
-          command: scan
-          scan-input: .
-          format: json
-          spec-version: "1.6"
-          hf-mode: online
-          no-security-scan: "false"
-          log-level: standard
-          aibomgen-version: v0.2.1
-          upload-artifact: "true"
-          upload-release-assets: "true"
-
-      - name: Validate discovered AIBOMs
-        uses: CRA-tools/aibomgen-cli-action@main
-        with:
-          command: validate
-          validate-input: ${{ steps.scan.outputs.written-files }}
-          validate-strict: "true"
-          validate-min-score: "0.1"
-          validate-check-model-card: "true"
-          log-level: standard
-          aibomgen-version: v0.2.1
-
-      - name: Generate SBOM with Syft
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          upload-artifact: "false"
-          output-file: sbom.cdx.json
-          format: cyclonedx-json
-
-      - name: Merge AIBOMs with SBOM and generate final BOM
-        id: merge
-        uses: CRA-tools/aibomgen-cli-action@main
-        with:
-          command: merge
-          merge-aibom-files: ${{ steps.scan.outputs.written-files }}
-          merge-sbom-file: sbom.cdx.json
-          merge-output-file: final_bom.json
-          format: json
-          log-level: standard
-          aibomgen-version: v0.2.1
-          upload-artifact: "true"
-          upload-release-assets: "true"
+```bash
+gh release create reference-product-v1.0.0 --prerelease --latest=false \
+  --title "Reference product v1.0.0" --notes "Release of the fake product in examples/reference-product"
 ```
 
-The workflow above already demonstrates the main commands used in CI: `scan`, `validate`, and `merge`.
+[.github/workflows/reference-security-gate.yml](.github/workflows/reference-security-gate.yml) covers the failing branch. It scans [examples/reference-product-unsafe](examples/reference-product-unsafe), which uses [`ykilcher/totally-harmless-model`](https://huggingface.co/ykilcher/totally-harmless-model), a demo model whose `pytorch_model.bin` every Hub scanner rates critical. The workflow succeeds only when strict validation blocks the build. The AIBOM, with the finding in its `vulnerabilities`, is uploaded as `blocked-aiboms` for inspection.
 
-Use the additional examples below for commands that are typically run on existing AIBOM files outside the main scan-to-merge flow.
+[.github/workflows/reference-refresh.yml](.github/workflows/reference-refresh.yml) is the scheduled half. Every week, and after each successful pipeline run on `main`, it downloads the latest AIBOMs, refreshes their security findings with `vuln-scan` (`vuln-scan-enrich: "true"`), and validates them again.
 
-### Additional command examples
+Copy the workflows into your own repository, replacing `uses: ./` with `uses: CRA-tools/aibomgen-cli-action@v1` and `PRODUCT_DIR` with the directory to scan. To verify a signature from the artifact:
+
+```bash
+cosign verify-blob merged.cdx.json \
+  --bundle merged.cdx.json.sigstore.json \
+  --certificate-identity "https://github.com/CRA-tools/aibomgen-cli-action/.github/workflows/reference-pipeline.yml@refs/heads/main" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+For files from a product release, the identity ends in `@refs/tags/<tag>` instead of `@refs/heads/main`.
+
+### Command examples
+
+#### Scan a repository
+
+```yaml
+- id: scan
+  uses: CRA-tools/aibomgen-cli-action@v1
+  with:
+    command: scan
+    scan-input: .
+    hf-token: ${{ secrets.HF_TOKEN }} # optional, for gated models and higher rate limits
+```
 
 #### Generate from explicit model IDs
 
 ```yaml
-- uses: idlab-discover/aibomgen-cli-action@main
+- uses: CRA-tools/aibomgen-cli-action@v1
   with:
     command: generate
     generate-model-ids: |
@@ -131,109 +87,93 @@ Use the additional examples below for commands that are typically run on existin
     format: json
 ```
 
-#### Validate existing AIBOM files
+#### Validate AIBOM files
 
 ```yaml
-- uses: idlab-discover/aibomgen-cli-action@main
+- uses: CRA-tools/aibomgen-cli-action@v1
   with:
     command: validate
-    validate-input: |
-      dist/generated_aibom-1.json
-      dist/generated_aibom-2.json
+    validate-input: ${{ steps.scan.outputs.written-files }}
     validate-strict: "true"
-    validate-min-score: "0.6"
-    validate-check-model-card: "true"
+    validate-fail-severity: high
+    validate-min-score: "0.5"
 ```
 
-#### Merge one SBOM with multiple AIBOM files
+#### Merge AIBOM files into an SBOM
 
 ```yaml
-- uses: idlab-discover/aibomgen-cli-action@main
+- uses: CRA-tools/aibomgen-cli-action@v1
   with:
     command: merge
-    merge-aibom-files: |
-      dist/model1_aibom.json
-      dist/model2_aibom.json
-    merge-sbom-file: dist/sbom.json
-    merge-output-file: dist/merged_bom.json
+    merge-aibom-files: ${{ steps.scan.outputs.written-files }}
+    merge-sbom-file: sbom.cdx.json
+    merge-output-file: dist/merged.cdx.json
 ```
 
-#### Enrich an existing AIBOM with vulnerability findings
+The merged BOM is written as XML when `merge-output-file` ends in `.xml`, and as JSON otherwise.
+
+#### Refresh vulnerability findings in existing AIBOMs
 
 ```yaml
-- uses: idlab-discover/aibomgen-cli-action@main
+- uses: CRA-tools/aibomgen-cli-action@v1
   with:
     command: vuln-scan
-    vuln-scan-input: dist/model_aibom.json
+    vuln-scan-input: |
+      dist/model1.aibom.cdx.json
+      dist/model2.aibom.cdx.json
     vuln-scan-enrich: "true"
-    vuln-scan-no-preview: "true"
-    vuln-scan-output-format: json
-    log-level: standard
 ```
 
-`vuln-scan-input` also accepts multiple files. When used with `vuln-scan-enrich: "true"`, each AIBOM is enriched in place.
+With `vuln-scan-enrich: "true"`, each AIBOM is updated in place. Without it, the findings are only reported.
 
-#### Check completeness for an existing AIBOM
+#### Check completeness of an AIBOM
 
 ```yaml
-- uses: idlab-discover/aibomgen-cli-action@main
+- uses: CRA-tools/aibomgen-cli-action@v1
   with:
     command: completeness
-    completeness-input: dist/model_aibom.json
-    completeness-plain-summary: "true"
-    format: json
+    completeness-input: dist/model.aibom.cdx.json
 ```
 
 #### Download-only mode
 
 ```yaml
 - id: aibomgen
-  uses: idlab-discover/aibomgen-cli-action@main
+  uses: CRA-tools/aibomgen-cli-action@v1
   with:
     command: download
+- run: ${{ steps.aibomgen.outputs.cmd }} --help
 ```
 
-### Release upload permissions
+### Artifacts and releases
 
-If `upload-release-assets: "true"`, your workflow should grant:
+- `scan`, `generate`, `merge`, and an enriching `vuln-scan` upload the files they write as one workflow artifact, keeping the original filenames. The default artifact names are `output-aiboms` (`scan`, `generate`), `output-aiboms-vuln` (`vuln-scan`), and `merged` (`merge`); `artifact-name` overrides them. Set `upload-artifact: "false"` to skip the upload.
+- On a `release` event or a tag push that has a release, the same files are attached to that release (`upload-release-assets`). This needs:
 
 ```yaml
 permissions:
   contents: write
-  actions: read
 ```
-
-### Artifact and release naming
-
-- For `scan`, `generate`, and `merge`, the action uploads the produced BOM files with their original filenames preserved.
-- The default workflow artifact names are `output-aiboms` for `scan` and `generate`, `output-aiboms-vuln` for enriched `vuln-scan` output, and `merged` for `merge`.
-- Workflow artifacts are uploaded as a single artifact bundle. If `artifact-name` is set, it changes only the bundle label shown in GitHub Actions, not the filenames inside the bundle.
-- Release uploads use the current run's produced files directly when the workflow is running on a release event or a tag push that resolves to a release.
-- If `generate` produces multiple AIBOM files, all discovered files are uploaded to the workflow artifact and attached to the release.
-- `aibom-artifact-match` remains available as a fallback for release attachment when current-run output files are not available.
 
 ### Outputs
 
-- `cmd`: resolved aibomgen-cli path (download command)
-- `executed-command`: command run by action
-- `written-files`: newline-separated discovered output files
+- `cmd`: path to the installed aibomgen-cli (`download` command)
+- `executed-command`: the command the action ran
+- `written-files`: newline-separated paths of the files the command wrote
 
 ### Local validation
 
-Run the same core checks used by CI before opening a PR:
+Run the same checks as CI before opening a PR:
 
 ```bash
-npm run build
-npm run lint
-npm test
-npm run package
+npm run all
 ```
 
 ### Notes
 
-- Default bundled CLI version is `v0.2.1`.
-- `aibomgen-sha256` can be used to verify release archive integrity.
-- Artifact pattern matching mode is constrained to `exact` or `glob` (no raw regex).
+- The default CLI version is `v0.3.0` (`aibomgen-version`).
+- `aibomgen-sha256` verifies the downloaded release archive.
+- `hf-token` is passed to the CLI as the `HF_TOKEN` environment variable and masked in logs.
 
 ## Contact
 

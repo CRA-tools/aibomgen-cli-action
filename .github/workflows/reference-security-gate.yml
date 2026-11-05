@@ -1,0 +1,53 @@
+# The "validate -> fail -> build fails" branch of Fig. 1 of the AIBoMGen CLI paper: a product
+# (examples/reference-product-unsafe) that uses a model with a critical Hub security finding must be blocked
+# before merge and signing. Succeeds only when strict validation fails the build.
+name: Reference security gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scan the unsafe product
+        id: scan
+        uses: ./
+        with:
+          command: scan
+          scan-input: examples/reference-product-unsafe
+          hf-token: ${{ secrets.HF_TOKEN }} # optional, raises Hub rate limits
+          artifact-name: blocked-aiboms # kept to inspect the critical finding
+          upload-release-assets: "false"
+
+      - name: Validate AIBOMs (expected to fail)
+        id: validate
+        continue-on-error: true
+        uses: ./
+        with:
+          command: validate
+          validate-input: ${{ steps.scan.outputs.written-files }}
+          validate-strict: "true"
+          validate-fail-severity: high
+
+      - name: Check that the gate blocked the build
+        if: steps.validate.outcome != 'failure'
+        run: |
+          echo "::error::strict validation passed an AIBOM with a critical security finding"
+          exit 1

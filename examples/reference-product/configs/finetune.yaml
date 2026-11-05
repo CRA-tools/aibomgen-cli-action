@@ -1,0 +1,4 @@
+base_model: Qwen/Qwen2.5-0.5B
+output_dir: ./checkpoints
+learning_rate: 2.0e-5
+num_train_epochs: 1
